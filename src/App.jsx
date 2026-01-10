@@ -1,9 +1,9 @@
-import React, { use, useEffect, useState } from 'react'
-import Search from './components/search'
+import React, { useEffect, useState } from 'react'
+import Search from './components/Search'
 import Spinner from './components/Spin'
-import {useDebounce} from 'react-use'
-import MovieCard from './components/MovieCard';
-import { getTrendingSearches, updateSearchCount } from './appwrite';
+import { useDebounce } from 'react-use'
+import MovieCard from './components/MovieCard'
+import { getTrendingSearches, updateSearchCount } from './appwrite'
 
 const API_BASE_URL = 'https://api.themoviedb.org/3/';
 
