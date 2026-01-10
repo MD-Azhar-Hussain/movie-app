@@ -1,16 +1,117 @@
-# React + Vite
+🎬 FilmPoint – Movie Discovery App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Live Demo: https://filmpoint.vercel.app/
 
-Currently, two official plugins are available:
+A modern movie discovery web app built with React + Vite + Appwrite + TMDB API.
+Search movies, explore trending searches, and get real-time recommendations.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+🚀 Features
 
-## React Compiler
+Movie search using TMDB API
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Trending searches powered by Appwrite Database
 
-## Expanding the ESLint configuration
+Debounced search for performance
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Clean UI with Tailwind / custom styling
+
+Fully deployed on Vercel
+
+🛠 Tech Stack
+
+React (Vite)
+
+Appwrite (Database & API)
+
+TMDB API
+
+Vercel (Deployment)
+
+📦 Installation
+git clone https://github.com/MD-Azhar-Hussain/mchck.git
+cd mchck
+npm install
+
+🔐 Environment Variables
+
+Create a .env file in the root directory and add:
+
+VITE_API_KEY=YOUR_TMDB_BEARER_TOKEN
+
+VITE_APPWRITE_PROJECT_ID=YOUR_PROJECT_ID
+VITE_APPWRITE_PROJECT_NAME=Movie-Suggestion
+VITE_APPWRITE_ENDPOINT=https://nyc.cloud.appwrite.io/v1
+VITE_APPWRITE_DATABASE_ID=YOUR_DATABASE_ID
+VITE_APPWRITE_COLLECTION_ID=YOUR_COLLECTION_ID
+
+🔑 How to Get These Keys
+1️⃣ TMDB API Key
+
+Go to: https://www.themoviedb.org/settings/api
+
+Create an API key
+
+Copy the Bearer Token (v4 auth)
+
+Paste into:
+
+VITE_API_KEY=eyJhbGciOi...
+
+2️⃣ Appwrite Keys
+
+Go to: https://cloud.appwrite.io
+
+Create a Project
+
+Go to Settings → General
+
+Copy Project ID → VITE_APPWRITE_PROJECT_ID
+
+Go to Databases
+
+Create Database → Copy ID → VITE_APPWRITE_DATABASE_ID
+
+Create Collection → Copy ID → VITE_APPWRITE_COLLECTION_ID
+
+Endpoint will be:
+
+https://nyc.cloud.appwrite.io/v1
+
+
+Go to Integrations → Platforms
+
+Add Web App
+
+Hostname: localhost and *.vercel.app
+
+▶ Run Locally
+npm run dev
+
+
+App runs at:
+
+http://localhost:5173
+
+🌐 Deploy on Vercel
+
+Push project to GitHub
+
+Go to https://vercel.com/new
+
+Import GitHub repo
+
+Add same .env variables in:
+
+Project → Settings → Environment Variables
+
+Deploy 🎉
+
+📸 Preview
+
+Live Site: https://filmpoint.vercel.app/
+
+👨‍💻 Author
+
+MD Azhar Hussain
+CSE (IoT) | Frontend Developer | Cloud & API Integrations
+GitHub: https://github.com/MD-Azhar-Hussain
