@@ -4,18 +4,21 @@ import Spinner from './components/Spin'
 import { useDebounce } from 'react-use'
 import MovieCard from './components/MovieCard'
 import { getTrendingSearches, updateSearchCount } from './appwrite'
+import { Helmet } from "react-helmet-async";
 
+
+import { API_OPTIONS } from './api/tmdb';
 const API_BASE_URL = 'https://api.themoviedb.org/3/';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 
-const API_OPTIONS = {
-  method: 'GET',
-  headers: {
-    accept: 'application/json',
-    Authorization: `Bearer ${API_KEY}`,
-  },
-}
+// const API_OPTIONS = {
+//   method: 'GET',
+//   headers: {
+//     accept: 'application/json',
+//     Authorization: `Bearer ${API_KEY}`,
+//   },
+// }
 
 const App = () => {
 
@@ -30,15 +33,17 @@ const App = () => {
 
   const [trendingMovies, setTrendingMovies] = useState([]);
 
-  const[debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
 
-  useDebounce( () =>{
+  useDebounce(() => {
     setDebouncedSearchTerm(searchTerm);
-  }, 500, [searchTerm] )
+  }, 500, [searchTerm])
+
+
 
 
   const loadTrendingMovies = async () => {
-    try{
+    try {
       const movies = await getTrendingSearches();
 
       setTrendingMovies(movies);
@@ -63,17 +68,17 @@ const App = () => {
       const data = await response.json();
       console.log(data.results);
       setMoviesList(data.results);
-     
-      if(query && data.results.length > 0){
+
+      if (query && data.results.length > 0) {
         await updateSearchCount(query, data.results[0]);
       }
-      
+
     } catch (error) {
       console.error('Error fetching movies:', error);
       setErrorMessage('Failed to fetch movies. Please try again later.');
     } finally {
       setIsLoading(false);
-      
+
     }
   }
 
@@ -86,6 +91,37 @@ const App = () => {
   }, []);
   return (
     <main>
+      
+      <Helmet>
+        <title>MovieVerse | Discover Trending & Popular Movies</title>
+
+        <meta
+          name="description"
+          content="Search and explore trending movies with cinematic UI, real-time popularity, ratings, and direct IMDb links."
+        />
+
+        <meta name="keywords" content="movies, trending movies, IMDb, TMDB, movie search, film discovery" />
+
+        {/* Open Graph for social sharing */}
+        <meta property="og:title" content="MovieVerse – Discover Movies You'll Enjoy" />
+        <meta
+          property="og:description"
+          content="A futuristic movie discovery platform with trending analytics and IMDb integration."
+        />
+        <meta property="og:image" content="/hero.png" />
+        <meta property="og:type" content="website" />
+
+        {/* Twitter preview */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="MovieVerse – Discover Movies You'll Enjoy" />
+        <meta
+          name="twitter:description"
+          content="Search trending and popular movies with ratings and direct IMDb access."
+        />
+        <meta name="twitter:image" content="/hero.png" />
+      </Helmet>
+
+
       <div className="pattern" />
 
       <div className="wrapper">
@@ -99,21 +135,43 @@ const App = () => {
       </h1> */}
 
         </header>
-          
-        {trendingMovies.length > 0 &&(
+
+        {trendingMovies.length > 0 && (
           <section className="trending">
             <h2 className="text-white text-2xl font-bold mb-4">
               Trending Searches
-            </h2> 
+            </h2>
             <ul>
               {trendingMovies.map((movie, index) => (
-                <li key={movie.$id} className="trending-item">
-                  <p>{index+1}</p>
-                  <img src={movie.poster_url} alt={movie.title} />
+                <li
+                  key={movie.$id}
+                  className="trending-item cursor-pointer"
+                  onClick={async () => {
+                    const newTab = window.open('', '_blank'); // open instantly
+
+                    try {
+                      const res = await fetch(
+                        `https://api.themoviedb.org/3/movie/${movie.movie_id}`,
+                        API_OPTIONS
+                      );
+                      const data = await res.json();
+
+                      if (data.imdb_id) {
+                        newTab.location.href = `https://www.imdb.com/title/${data.imdb_id}`;
+                      }
+                    } catch (err) {
+                      newTab.close();
+                      console.error("Failed to fetch IMDb ID", err);
+                    }
+                  }}
+                >
+                  <p>{index + 1}</p>
+                  <img src={movie.poster_url} alt={movie.searchTerm} />
                 </li>
+
               ))}
             </ul>
-          </section>  
+          </section>
         )
 
         }
@@ -126,7 +184,7 @@ const App = () => {
 
           {isLoading ? (
             <Spinner />
-        
+
           ) : errorMessage ? (
             <p className='text-red-500'>{errorMessage}</p>
           ) : (
@@ -134,8 +192,30 @@ const App = () => {
               {
                 moviesList.map((movie) => (
                   // <p key ={movie.id} className='text-white'>{movie.title}</p>
-                  <MovieCard key={movie.id} movie={movie} />
-                 ))
+                  <MovieCard
+                    key={movie.id}
+                    movie={movie}
+                    onClick={async () => {
+                      const newTab = window.open('', '_blank'); // opens immediately
+
+                      try {
+                        const res = await fetch(
+                          `https://api.themoviedb.org/3/movie/${movie.id}`,
+                          API_OPTIONS
+                        );
+                        const data = await res.json();
+
+                        if (data.imdb_id) {
+                          newTab.location.href = `https://www.imdb.com/title/${data.imdb_id}`;
+                        }
+                      } catch (err) {
+                        newTab.close();
+                        console.error("Failed to fetch IMDb ID", err);
+                      }
+                    }}
+                  />
+
+                ))
               }
             </ul>
           )}

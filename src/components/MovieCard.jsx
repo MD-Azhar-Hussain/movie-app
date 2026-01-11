@@ -1,8 +1,26 @@
 import React from 'react'
+import { API_OPTIONS } from '../api/tmdb';
+const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date, original_language },onClick }) => {
+  
+//   const handleClick = async () => {
+//   try {
+//     const res = await fetch(
+//       `https://api.themoviedb.org/3/movie/${movie.id}`,
+//       API_OPTIONS
+//     );
+//     const data = await res.json();
 
-const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date, original_language } }) => {
+//     if (data.imdb_id) {
+//       window.open(`https://www.imdb.com/title/${data.imdb_id}`, '_blank');
+//     }
+//   } catch (err) {
+//     console.error("Failed to fetch IMDb ID", err);
+//   }
+// };
+
+  
   return (
-    <div className='movie-card' onMouseMove={(e) => {
+    <div className='movie-card' onClick={onClick} onMouseMove={(e) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
