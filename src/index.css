@@ -380,6 +380,11 @@
   overflow: hidden;
 }
 
+.movie-card > * {
+  position: relative;
+  z-index: 1;
+}
+
 .movie-card::after {
   content: "View Details";
   position: absolute;
@@ -394,6 +399,8 @@
   opacity: 0;
   transition: opacity 0.35s ease;
   text-transform: uppercase;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .movie-card:hover::after {
@@ -491,6 +498,8 @@ main::after {
   transform: rotate(25deg);
   transition: all 0.8s ease;
   opacity: 0;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .movie-card:hover::before {
@@ -506,6 +515,8 @@ main::after {
   background: radial-gradient(circle at top, rgba(171,139,255,0.35), transparent 70%);
   opacity: 0;
   transition: opacity 0.4s ease;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .movie-card:hover::after {
@@ -560,6 +571,7 @@ main::after {
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
+  z-index: 0;
 }
 
 .movie-card:hover::before {

@@ -1,0 +1,35 @@
+.movie-image {
+  cursor: pointer;
+}
+
+.movie-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.movie-action-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.movie-action-btn:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.watch-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.download-btn {
+  background: #3b82f6;
+  color: white;
+}

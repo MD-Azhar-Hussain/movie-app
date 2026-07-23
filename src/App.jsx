@@ -5,7 +5,7 @@ import { useDebounce } from 'react-use'
 import MovieCard from './components/MovieCard'
 import { getTrendingSearches, updateSearchCount } from './appwrite'
 import { Helmet } from "react-helmet-async";
-
+import { Analytics } from '@vercel/analytics/react'
 
 import { API_OPTIONS } from './api/tmdb';
 const API_BASE_URL = 'https://api.themoviedb.org/3/';
@@ -123,6 +123,8 @@ const App = () => {
 
 
       <div className="pattern" />
+
+      <Analytics />
 
       <div className="wrapper">
         <header>

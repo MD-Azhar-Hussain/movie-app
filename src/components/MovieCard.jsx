@@ -1,26 +1,45 @@
 import React from 'react'
-import { API_OPTIONS } from '../api/tmdb';
-const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date, original_language },onClick }) => {
-  
-//   const handleClick = async () => {
-//   try {
-//     const res = await fetch(
-//       `https://api.themoviedb.org/3/movie/${movie.id}`,
-//       API_OPTIONS
-//     );
-//     const data = await res.json();
 
-//     if (data.imdb_id) {
-//       window.open(`https://www.imdb.com/title/${data.imdb_id}`, '_blank');
-//     }
-//   } catch (err) {
-//     console.error("Failed to fetch IMDb ID", err);
-//   }
-// };
+const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date, original_language }, onClick }) => {
+  const handleActionClick = (event, url) => {
+    event.stopPropagation();
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
 
-  
+  const openWithFallbacks = async (event, primaryUrl, fallbackUrls = []) => {
+    event.stopPropagation();
+
+    const urls = [primaryUrl, ...fallbackUrls];
+
+    for (const url of urls) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1800);
+
+        await fetch(url, {
+          method: 'HEAD',
+          mode: 'no-cors',
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+        if (newWindow) {
+          return;
+        }
+
+        return;
+      } catch {
+        continue;
+      }
+    }
+
+    window.open(primaryUrl, '_blank', 'noopener,noreferrer');
+  };
+
   return (
-    <div className='movie-card' onClick={onClick} onMouseMove={(e) => {
+    <div className='movie-card' onMouseMove={(e) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -30,7 +49,9 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
     >
       {/* <p key={id} className='text-white'>{title}</p> */}
 
-      <img src={`${poster_path ? 'https://image.tmdb.org/t/p/w500' + poster_path : '/no-movie.png'}`} alt={title} />
+      <div className='movie-image' onClick={onClick}>
+        <img src={`${poster_path ? 'https://image.tmdb.org/t/p/w500' + poster_path : '/no-movie.png'}`} alt={title} />
+      </div>
 
       <div className='mt-4'>
         <h3>{title}</h3>
@@ -52,6 +73,28 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
           </span>
         </div>
 
+        <div className='movie-actions mt-4 flex items-center justify-between gap-2'>
+          <button
+            type='button'
+            className='movie-action-btn rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-sky-600'
+            onClick={(event) => openWithFallbacks(event, `https://cinespot.to/movie/${id}`, [
+              `https://doomflix.to/movie/${id}`,
+              `https://guideflix.to/movie/${id}`,
+              `https://indexflix.to/movie/${id}`,
+              `https://streamiloo.to/movie/${id}`,
+              `https://streamzy.to/movie/${id}`,
+            ])}
+          >
+            Watch
+          </button>
+          <button
+            type='button'
+            className='movie-action-btn ml-auto rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-600'
+            onClick={(event) => handleActionClick(event, `https://vidvault.ru/movie/${id}`)}
+          >
+            Download
+          </button>
+        </div>
       </div>
     </div>
   )
