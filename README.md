@@ -44,6 +44,9 @@ VITE_APPWRITE_ENDPOINT=https://nyc.cloud.appwrite.io/v1
 VITE_APPWRITE_DATABASE_ID=YOUR_DATABASE_ID
 VITE_APPWRITE_COLLECTION_ID=YOUR_COLLECTION_ID
 
+# Optional: enable watchlist background sync
+VITE_APPWRITE_WATCHLIST_COLLECTION_ID=YOUR_WATCHLIST_COLLECTION_ID
+
 🔑 How to Get These Keys
 1️⃣ TMDB API Key
 
@@ -83,6 +86,23 @@ Go to Integrations → Platforms
 Add Web App
 
 Hostname: localhost and *.vercel.app
+
+🗂 Optional Watchlist Sync Collection
+
+To enable the local-first + background sync watchlist flow, create a separate Appwrite collection and use its ID in VITE_APPWRITE_WATCHLIST_COLLECTION_ID.
+
+Required attributes:
+- device_key (string, required)
+- movie_id (integer, required)
+- payload (string, required)
+- updated_at (string, required)
+
+Recommended indexes:
+- device_key
+- movie_id
+- optional combined index on device_key + movie_id
+
+If VITE_APPWRITE_WATCHLIST_COLLECTION_ID is not set, watchlist stays fully local (localStorage only).
 
 ▶ Run Locally
 npm run dev

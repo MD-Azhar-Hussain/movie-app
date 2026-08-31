@@ -1,5 +1,24 @@
 import React from 'react'
 
+const getPosterImageSource = (posterValue) => {
+  if (typeof posterValue !== 'string') return '/no-movie.png';
+
+  const normalizedPosterValue = posterValue.trim();
+  if (!normalizedPosterValue || normalizedPosterValue === 'null' || normalizedPosterValue === 'undefined') {
+    return '/no-movie.png';
+  }
+
+  if (normalizedPosterValue.startsWith('http://') || normalizedPosterValue.startsWith('https://')) {
+    if (normalizedPosterValue.includes('/w500null') || normalizedPosterValue.includes('/w500undefined')) {
+      return '/no-movie.png';
+    }
+
+    return normalizedPosterValue;
+  }
+
+  return `https://image.tmdb.org/t/p/w500${normalizedPosterValue}`;
+};
+
 const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date, original_language }, onClick }) => {
   const handleActionClick = (event, url) => {
     event.stopPropagation();
@@ -39,18 +58,23 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
   };
 
   return (
-    <div className='movie-card' onMouseMove={(e) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      e.currentTarget.style.setProperty('--x', `${x}%`);
-      e.currentTarget.style.setProperty('--y', `${y}%`);
-    }}
+    <div
+      className='movie-card'
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        e.currentTarget.style.setProperty('--x', `${x}%`);
+        e.currentTarget.style.setProperty('--y', `${y}%`);
+      }}
     >
-      {/* <p key={id} className='text-white'>{title}</p> */}
-
-      <div className='movie-image' onClick={onClick}>
-        <img src={`${poster_path ? 'https://image.tmdb.org/t/p/w500' + poster_path : '/no-movie.png'}`} alt={title} />
+      <div className='movie-image' onClick={onClick} role='button' tabIndex={0} onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick?.();
+        }
+      }}>
+        <img src={getPosterImageSource(poster_path)} alt={title} />
       </div>
 
       <div className='mt-4'>
@@ -67,9 +91,7 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
           <p className='lang'>{original_language}</p>
 
           <span className='year'>
-            {
-              release_date ? release_date.split('-')[0] : 'N/A'
-            }
+            {release_date ? release_date.split('-')[0] : 'N/A'}
           </span>
         </div>
 
