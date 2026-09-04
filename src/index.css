@@ -125,14 +125,14 @@
     flex: 0 0 auto;
     border-radius: 0.75rem;
     object-fit: cover;
-    opacity: 0.8;
+    opacity: 1;
     box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
     transform: rotate(-2deg);
   }
 
   .poster-gallery-track-reverse img {
     transform: rotate(2deg);
-    opacity: 0.62;
+    opacity: 0.8;
   }
 
   @keyframes poster-scroll-forward {
@@ -551,14 +551,14 @@
     flex: 0 0 auto;
     border-radius: 0.75rem;
     object-fit: cover;
-    opacity: 0.8;
+    opacity: 0.9;
     box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
     transform: rotate(-2deg);
   }
 
   .poster-gallery-track-reverse img {
     transform: rotate(2deg);
-    opacity: 0.62;
+    opacity: 0.8;
   }
 
   @keyframes poster-scroll-forward {
