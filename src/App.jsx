@@ -13,6 +13,7 @@ import {
 } from './appwrite'
 import { Helmet } from 'react-helmet-async';
 import { Analytics } from '@vercel/analytics/react'
+import POSTER_FILES from 'virtual:poster-manifest'
 
 import { API_OPTIONS } from './api/tmdb';
 const API_BASE_URL = 'https://api.themoviedb.org/3/';
@@ -21,6 +22,13 @@ const WATCHLIST_DEVICE_KEY_STORAGE = 'movie-watchlist-device-key';
 const WATCHLIST_SYNC_QUEUE_KEY = 'movie-watchlist-sync-queue';
 const RECENT_SEARCHES_STORAGE_KEY = 'movie-recent-searches';
 const MAX_RECENT_SEARCHES = 8;
+const getPosterTitle = (fileName) => fileName
+  .replace(/\.[^.]+$/, '')
+  .replace(/[-_]+/g, ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+const INITIAL_GALLERY_POSTERS = 8;
+const LANDING_POSTERS = POSTER_FILES.map((fileName) => [fileName, getPosterTitle(fileName)]);
+const LANDING_POSTERS_SECOND = [...LANDING_POSTERS].sort(() => Math.random() - 0.5);
 
 const normalizeSearchTerm = (value) => {
   if (typeof value !== 'string') return '';
@@ -599,7 +607,30 @@ const App = () => {
 
       <div className="wrapper">
         <header>
-          <img src="./hero.png" alt="Hero Banner" />
+          <div className="poster-gallery" aria-label="Featured movie posters">
+            <div className="poster-gallery-track poster-gallery-track-forward">
+              {[...LANDING_POSTERS, ...LANDING_POSTERS].map(([fileName, title], index) => (
+                <img
+                  key={`forward-${fileName}-${index}`}
+                  src={`/newposters/${encodeURIComponent(fileName)}`}
+                  alt={`${title} poster`}
+                  loading={index < INITIAL_GALLERY_POSTERS ? 'eager' : 'lazy'}
+                  decoding="async"
+                />
+              ))}
+            </div>
+            <div className="poster-gallery-track poster-gallery-track-reverse">
+              {[...LANDING_POSTERS_SECOND, ...LANDING_POSTERS_SECOND].map(([fileName, title], index) => (
+                <img
+                  key={`reverse-${fileName}-${index}`}
+                  src={`/newposters/${encodeURIComponent(fileName)}`}
+                  alt={`${title} poster`}
+                  loading={index < INITIAL_GALLERY_POSTERS ? 'eager' : 'lazy'}
+                  decoding="async"
+                />
+              ))}
+            </div>
+          </div>
           <h1>
             Find <span className="text-gradient">Movies</span> You'll Enjoy
           </h1>
@@ -640,7 +671,12 @@ const App = () => {
                   }}
                 >
                   <p>{index + 1}</p>
-                  <img src={getPosterImageSource(movie.poster_url || movie.poster_path)} alt={movie.searchTerm} />
+                  <img
+                    src={getPosterImageSource(movie.poster_url || movie.poster_path)}
+                    alt={movie.searchTerm}
+                    loading="lazy"
+                    decoding="async"
+                  />
                 </li>
               ))}
             </ul>
@@ -675,6 +711,8 @@ const App = () => {
                   <img
                     src={getPosterImageSource(movie.poster_path || movie.poster_url)}
                     alt={movie.title}
+                    loading="lazy"
+                    decoding="async"
                   />
                   <div className="watchlist-details">
                     <p>{movie.title}</p>

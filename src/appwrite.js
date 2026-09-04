@@ -25,11 +25,17 @@ const getPosterImageSource = (posterValue) => {
     return `https://image.tmdb.org/t/p/w500${normalizedPosterValue}`;
 };
 
-const client = new Client()
-    .setEndpoint(endpoint)
-    .setProject(projectID);
+const isSearchTrackingConfigured = Boolean(
+    projectID && databaseID && collectionID && endpoint
+);
 
-const database = new Databases(client);
+const client = isSearchTrackingConfigured || Boolean(
+    projectID && databaseID && endpoint && watchlistCollectionID
+)
+    ? new Client().setEndpoint(endpoint).setProject(projectID)
+    : null;
+
+const database = client ? new Databases(client) : null;
 
 export const isWatchlistSyncConfigured = Boolean(
     projectID && databaseID && endpoint && watchlistCollectionID
@@ -41,6 +47,8 @@ const getWatchlistSyncCollectionId = () => {
 };
 
 export const updateSearchCount = async (searchTerm, movie) => {
+    if (!isSearchTrackingConfigured || !database) return;
+
     // console.log(projectID,databaseID,collectionID,endpoint);
 
     //1. Use Appwrite API fro search term that already exists, then update its count
@@ -74,6 +82,8 @@ export const updateSearchCount = async (searchTerm, movie) => {
 }
 
 export const getTrendingSearches = async () => {
+    if (!isSearchTrackingConfigured || !database) return [];
+
     try{
         const result = await database.listDocuments(databaseID,collectionID,[
             Query.orderDesc('count'),
@@ -88,7 +98,7 @@ export const getTrendingSearches = async () => {
 
 export const getWatchlistSyncDocuments = async (deviceKey) => {
     const syncCollection = getWatchlistSyncCollectionId();
-    if (!syncCollection || !deviceKey) return [];
+    if (!syncCollection || !deviceKey || !database) return [];
 
     try {
         const result = await database.listDocuments(syncCollection.databaseId, syncCollection.collectionId, [
@@ -106,7 +116,7 @@ export const getWatchlistSyncDocuments = async (deviceKey) => {
 
 export const upsertWatchlistSyncDocument = async (deviceKey, movie) => {
     const syncCollection = getWatchlistSyncCollectionId();
-    if (!syncCollection || !deviceKey || !movie || movie.id === undefined || movie.id === null) {
+    if (!syncCollection || !deviceKey || !database || !movie || movie.id === undefined || movie.id === null) {
         return;
     }
 
@@ -152,7 +162,7 @@ export const upsertWatchlistSyncDocument = async (deviceKey, movie) => {
 
 export const deleteWatchlistSyncDocument = async (deviceKey, movieId) => {
     const syncCollection = getWatchlistSyncCollectionId();
-    if (!syncCollection || !deviceKey || movieId === undefined || movieId === null) {
+    if (!syncCollection || !deviceKey || !database || movieId === undefined || movieId === null) {
         return;
     }
 

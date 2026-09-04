@@ -38,7 +38,15 @@
   }
 
   main {
-    @apply min-h-screen relative bg-primary;
+    @apply min-h-screen relative;
+    background: linear-gradient(
+      180deg,
+      #030014 0,
+      #030014 34rem,
+      #0a0820 52rem,
+      #08061a 78%,
+      #030014 100%
+    );
   }
 
   header {
@@ -46,7 +54,7 @@
   }
 
   header img {
-    @apply w-full max-w-lg h-auto object-contain mx-auto drop-shadow-md;
+    @apply w-full h-auto object-contain;
   }
 }
 
@@ -57,6 +65,65 @@
 
   .wrapper {
     @apply px-5 py-12 xs:p-10 max-w-7xl mx-auto flex flex-col relative z-10;
+  }
+
+  .poster-gallery {
+    position: relative;
+    width: calc(100% + 2rem);
+    margin: -2rem -1rem 2.5rem;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+
+  .poster-gallery::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, #030014 0%, transparent 10%, transparent 90%, #030014 100%);
+  }
+
+  .poster-gallery-track {
+    display: flex;
+    width: max-content;
+    gap: 0.9rem;
+    padding: 0.45rem 0;
+    will-change: transform;
+  }
+
+  .poster-gallery-track-forward {
+    animation: poster-scroll-forward 42s linear infinite;
+  }
+
+  .poster-gallery-track-reverse {
+    margin-left: -10rem;
+    animation: poster-scroll-reverse 48s linear infinite;
+  }
+
+  .poster-gallery-track img {
+    width: clamp(5.8rem, 12vw, 9.5rem);
+    aspect-ratio: 2 / 3;
+    flex: 0 0 auto;
+    border-radius: 0.75rem;
+    object-fit: cover;
+    opacity: 0.8;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+    transform: rotate(-2deg);
+  }
+
+  .poster-gallery-track-reverse img {
+    transform: rotate(2deg);
+    opacity: 0.62;
+  }
+
+  @keyframes poster-scroll-forward {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  @keyframes poster-scroll-reverse {
+    from { transform: translateX(-50%); }
+    to { transform: translateX(0); }
   }
 
   .trending {
@@ -92,14 +159,7 @@
 
     & input {
       @apply w-full bg-transparent py-2 sm:pr-10 pl-10 text-base text-gray-200 placeholder-light-200 outline-hidden;
-    }
-  }
-
-  .all-movies {
-    @apply space-y-9;
-
-    & ul {
-      @apply grid grid-cols-1 gap-5 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4;
+  
     }
   }
 
@@ -122,14 +182,6 @@
       @apply flex flex-row items-center gap-1;
     }
 
-    & .rating img {
-      @apply size-4 object-contain;
-    }
-
-    & .rating p {
-      @apply font-bold text-base text-white;
-    }
-
     & .content span {
       @apply text-sm text-gray-100;
     }
@@ -141,6 +193,12 @@
     & .content .year {
       @apply text-gray-100 font-medium text-base;
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster-gallery-track {
+    animation-play-state: paused;
   }
 }
 
@@ -160,6 +218,12 @@
 
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poster-gallery-track {
+    animation-play-state: paused;
   }
 }
  */
@@ -310,7 +374,26 @@
   }
 
   main {
-    @apply min-h-screen relative bg-primary;
+    @apply min-h-screen relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: #030014;
+  }
+
+  main::before {
+    content: "";
+    position: absolute;
+    inset: -18%;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 18% 30%, rgba(72, 57, 177, 0.2), transparent 30%),
+      radial-gradient(circle at 82% 46%, rgba(35, 102, 174, 0.14), transparent 28%),
+      radial-gradient(circle at 50% 88%, rgba(104, 53, 161, 0.16), transparent 34%);
+    background-size: 125% 125%;
+    filter: blur(34px);
+    opacity: 0.9;
+    animation: ambient-light-drift 24s ease-in-out infinite alternate;
   }
 
   header {
@@ -318,17 +401,90 @@
   }
 
   header img {
-    @apply w-full max-w-lg h-auto object-contain mx-auto drop-shadow-md;
+    @apply w-full h-auto object-contain;
   }
 }
 
 @layer components {
   .pattern {
     @apply bg-hero-pattern w-full h-screen bg-center bg-cover absolute z-0;
+    opacity: 0.72;
+    mix-blend-mode: screen;
+    animation: pattern-breathe 18s ease-in-out infinite alternate;
+  }
+
+  @keyframes ambient-light-drift {
+    0% { transform: translate3d(-2%, -1%, 0) scale(1); }
+    50% { transform: translate3d(2%, 1%, 0) scale(1.04); }
+    100% { transform: translate3d(-1%, 2%, 0) scale(1.08); }
+  }
+
+  @keyframes pattern-breathe {
+    from { opacity: 0.62; transform: scale(1); }
+    to { opacity: 0.78; transform: scale(1.025); }
   }
 
   .wrapper {
     @apply px-5 py-12 xs:p-10 max-w-7xl mx-auto flex flex-col relative z-10;
+  }
+
+  .poster-gallery {
+    position: relative;
+    width: calc(100% + 2rem);
+    margin: -2rem -1rem 2.5rem;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  }
+
+  .poster-gallery::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, #030014 0%, transparent 10%, transparent 90%, #030014 100%);
+  }
+
+  .poster-gallery-track {
+    display: flex;
+    width: max-content;
+    gap: 0.9rem;
+    padding: 0.45rem 0;
+    will-change: transform;
+  }
+
+  .poster-gallery-track-forward {
+    animation: poster-scroll-forward 42s linear infinite;
+  }
+
+  .poster-gallery-track-reverse {
+    margin-left: -10rem;
+    animation: poster-scroll-reverse 48s linear infinite;
+  }
+
+  .poster-gallery-track img {
+    width: clamp(5.8rem, 12vw, 9.5rem);
+    aspect-ratio: 2 / 3;
+    flex: 0 0 auto;
+    border-radius: 0.75rem;
+    object-fit: cover;
+    opacity: 0.8;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+    transform: rotate(-2deg);
+  }
+
+  .poster-gallery-track-reverse img {
+    transform: rotate(2deg);
+    opacity: 0.62;
+  }
+
+  @keyframes poster-scroll-forward {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  @keyframes poster-scroll-reverse {
+    from { transform: translateX(-25%); }
+    to { transform: translateX(25%); }
   }
 
   .trending {
@@ -369,6 +525,8 @@
 
   .all-movies {
     @apply space-y-9;
+    content-visibility: auto;
+    contain-intrinsic-size: 900px;
 
     & ul {
       @apply grid grid-cols-1 gap-5 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4;
@@ -656,15 +814,6 @@
   }
 }
 
-.trending::before {
-  content: "";
-  position: absolute;
-  inset: -20px;
-  background: radial-gradient(circle at top, rgba(171,139,255,0.35), transparent 70%);
-  filter: blur(40px);
-  z-index: -1;
-}
-
 /* ---- Cinematic Vignette + Film Grain ---- */
 main::after {
   content: "";
@@ -745,14 +894,6 @@ main::after {
 
 
 
-.trending::after {
-  content: "";
-  position: absolute;
-  inset: -30px;
-  background: radial-gradient(circle, rgba(171,139,255,0.4), transparent 70%);
-  filter: blur(50px);
-  z-index: -1;
-}
 
 
 
@@ -803,4 +944,12 @@ main::after {
   box-shadow:
     0 0 30px rgba(171,139,255,0.35),
     0 0 80px rgba(171,139,255,0.15);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main::before,
+  .pattern,
+  .poster-gallery-track {
+    animation: none;
+  }
 }
