@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 const getPosterImageSource = (posterValue) => {
   if (typeof posterValue !== 'string') return '/no-movie.png';
@@ -19,7 +19,55 @@ const getPosterImageSource = (posterValue) => {
   return `https://image.tmdb.org/t/p/w500${normalizedPosterValue}`;
 };
 
-const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date, original_language }, onClick }) => {
+const GENRE_NAMES = {
+  12: 'Adventure', 14: 'Fantasy', 16: 'Animation', 18: 'Drama', 27: 'Horror',
+  28: 'Action', 35: 'Comedy', 36: 'History', 37: 'Western', 53: 'Thriller',
+  80: 'Crime', 99: 'Documentary', 878: 'Sci-Fi', 9648: 'Mystery',
+  10402: 'Music', 10749: 'Romance', 10751: 'Family', 10752: 'War', 10770: 'TV Movie',
+};
+
+const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hidePopularBadge = false }) => {
+  const {
+    id,
+    title = 'Untitled movie',
+    vote_average: voteAverage,
+    poster_path: posterPath,
+    release_date: releaseDate,
+    original_language: originalLanguage,
+    overview,
+    genre_ids: genreIds = [],
+    popularity,
+    runtime,
+    certification,
+  } = movie;
+  const [imageFailed, setImageFailed] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [accentColor, setAccentColor] = useState('rgba(124, 93, 218, 0.22)');
+  const year = releaseDate ? releaseDate.split('-')[0] : 'N/A';
+  const rating = typeof voteAverage === 'number' && voteAverage > 0 ? voteAverage.toFixed(1) : 'N/A';
+  const genres = genreIds.map((genreId) => GENRE_NAMES[genreId]).filter(Boolean).slice(0, 2);
+  const releaseYear = Number(year);
+  const badges = [
+    voteAverage >= 8 ? 'Top Rated' : null,
+    !hidePopularBadge && popularity >= 100 ? 'Popular' : null,
+    releaseYear >= new Date().getFullYear() - 1 ? 'New' : null,
+  ].filter(Boolean).slice(0, 2);
+
+  const handlePosterLoad = (event) => {
+    setImageLoaded(true);
+    try {
+      const image = event.currentTarget;
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0, 1, 1);
+      const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+      setAccentColor(`rgba(${red}, ${green}, ${blue}, 0.28)`);
+    } catch {
+      // Cross-origin poster images can block pixel sampling; use the theme fallback.
+    }
+  };
   const handleActionClick = (event, url) => {
     event.stopPropagation();
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -58,47 +106,78 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
   };
 
   return (
-    <div
-      className='movie-card'
-      onMouseMove={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 100;
-        const y = ((e.clientY - rect.top) / rect.height) * 100;
-        e.currentTarget.style.setProperty('--x', `${x}%`);
-        e.currentTarget.style.setProperty('--y', `${y}%`);
-      }}
-    >
-      <div className='movie-image' onClick={onClick} role='button' tabIndex={0} onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick?.();
-        }
-      }}>
-        <img src={getPosterImageSource(poster_path)} alt={title} loading="lazy" decoding="async" />
+    <li className='movie-card' style={{ '--card-accent': accentColor, '--card-delay': `${Math.min(index, 7) * 45}ms` }}>
+      <div className='movie-card-poster-wrap'>
+        <button type='button' className='movie-card-poster-button' onClick={onClick} aria-label={`Open details for ${title}`}>
+          <img
+            className='movie-card-poster'
+            src={imageFailed ? '/no-movie.png' : getPosterImageSource(posterPath)}
+            alt={`${title} poster`}
+            loading='lazy'
+            decoding='async'
+            onLoad={handlePosterLoad}
+            onError={() => {
+              setImageFailed(true);
+              setImageLoaded(true);
+            }}
+          />
+          {!imageLoaded && <span className='movie-card-image-skeleton' aria-hidden='true' />}
+          <span className='movie-card-preview'>
+            <strong>View details</strong>
+            <span>{overview || 'Explore the cast, rating, synopsis, and more.'}</span>
+          </span>
+        </button>
+        <button
+          type='button'
+          className={`movie-save-button ${isSaved ? 'is-saved' : ''}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggleWatchlist?.();
+          }}
+          aria-label={isSaved ? `Remove ${title} from watchlist` : `Save ${title} to watchlist`}
+          aria-pressed={isSaved}
+        >
+          <span className='bookmark-icon' aria-hidden='true'>
+            {isSaved ? '★' : '☆'}
+          </span>
+          <span className='sr-only'>{isSaved ? 'Saved' : 'Save'}</span>
+        </button>
+        {badges.length > 0 && (
+          <div className='movie-card-badges' aria-label='Movie highlights'>
+            {badges.map((badge) => <span key={badge}>{badge}</span>)}
+          </div>
+        )}
       </div>
 
-      <div className='mt-4'>
-        <h3>{title}</h3>
-
-        <div className='content'>
-          <div className='rating'>
-            <img src="star.svg" alt="🔥" />
-            <p>{vote_average ? vote_average.toFixed(1) : 'N/A'}</p>
-          </div>
-
-          <span>💠</span>
-
-          <p className='lang'>{original_language}</p>
-
-          <span className='year'>
-            {release_date ? release_date.split('-')[0] : 'N/A'}
-          </span>
+      <div className='movie-card-body'>
+        <div className='movie-card-title-row'>
+          <h3 title={title}>{title}</h3>
+          <span className='movie-card-year'>{year}</span>
         </div>
 
-        <div className='movie-actions mt-4 flex items-center justify-between gap-2'>
+        <div className='movie-card-meta'>
+          <span className='movie-card-rating'>
+            <img src='star.svg' alt='' aria-hidden='true' />
+            {rating}
+          </span>
+          <span className='movie-card-dot' aria-hidden='true'>
+            •
+          </span>
+          <span>{originalLanguage?.toUpperCase() || 'EN'}</span>
+          {runtime ? <span>{runtime}m</span> : null}
+          {certification ? <span>{certification}</span> : null}
+        </div>
+
+        {genres.length > 0 && (
+          <div className='movie-card-genres' aria-label='Genres'>
+            {genres.map((genre) => <span key={genre}>{genre}</span>)}
+          </div>
+        )}
+
+        <div className='movie-card-actions'>
           <button
             type='button'
-            className='movie-action-btn rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-sky-600'
+            className='movie-card-action movie-card-action-watch'
             onClick={(event) => openWithFallbacks(event, `https://cinespot.to/movie/${id}`, [
               `https://indexflix.to/movie/${id}`,
               `https://streamzy.org/movie/${id}`,
@@ -111,14 +190,15 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
           </button>
           <button
             type='button'
-            className='movie-action-btn ml-auto rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-600'
+            className='movie-card-action movie-card-action-download'
             onClick={(event) => handleActionClick(event, `https://vidvault.ru/movie/${id}`)}
+            aria-label={`Download ${title}`}
           >
             Download
           </button>
         </div>
       </div>
-    </div>
+    </li>
   )
 }
 

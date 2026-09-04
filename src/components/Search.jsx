@@ -1,11 +1,16 @@
 import React from 'react'
 
-const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecentSearch }) => {
+const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecentSearch, onRandomSearch, isLoading }) => {
+  const handleSubmit = (event) => {
+    event.preventDefault();
+  };
+
   return (
     <div className='search-wrap'>
-      <div className='search'>
+      <div className='search-row'>
+        <form className='search' onSubmit={handleSubmit} role='search'>
         <div>
-          <img src="search.svg" alt="Search Icon" />
+          <img src="search.svg" alt="" aria-hidden="true" />
 
           <input
             type="text"
@@ -14,7 +19,32 @@ const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecent
             placeholder="Search for movies or TV series"
             aria-label="Search movies"
           />
+
+          {searchTerm && (
+            <button
+              type='button'
+              className='search-clear'
+              onClick={() => setSearchTerm('')}
+              aria-label='Clear search'
+            >
+              ×
+            </button>
+          )}
         </div>
+        <span className='search-status' aria-live='polite'>
+          {isLoading ? 'Searching...' : searchTerm ? 'Results update as you type' : 'Discover something new'}
+        </span>
+        </form>
+        <button
+          type='button'
+          className='random-search-button'
+          onClick={onRandomSearch}
+          aria-label='Choose a personalized random movie search'
+          title='Pick a movie based on your activity'
+        >
+          <span className='random-search-icon' aria-hidden='true'>✦</span>
+          <span>Random pick</span>
+        </button>
       </div>
 
       {recentSearches.length > 0 && (

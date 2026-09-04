@@ -3,6 +3,7 @@ import Search from './components/Search'
 import Spinner from './components/Spin'
 import { useDebounce } from 'react-use'
 import MovieCard from './components/MovieCard'
+import MovieCardSkeleton from './components/MovieCardSkeleton'
 import {
   deleteWatchlistSyncDocument,
   getTrendingSearches,
@@ -16,23 +17,55 @@ import { Analytics } from '@vercel/analytics/react'
 import POSTER_FILES from 'virtual:poster-manifest'
 
 import { API_OPTIONS } from './api/tmdb';
-const API_BASE_URL = 'https://api.themoviedb.org/3/';
+const API_BASE_URL = 'https://api.themoviedb.org/3';
 const WATCHLIST_STORAGE_KEY = 'movie-watchlist';
 const WATCHLIST_DEVICE_KEY_STORAGE = 'movie-watchlist-device-key';
 const WATCHLIST_SYNC_QUEUE_KEY = 'movie-watchlist-sync-queue';
 const RECENT_SEARCHES_STORAGE_KEY = 'movie-recent-searches';
+const RANDOM_PICK_HISTORY_STORAGE_KEY = 'movie-random-pick-history';
 const MAX_RECENT_SEARCHES = 8;
 const getPosterTitle = (fileName) => fileName
   .replace(/\.[^.]+$/, '')
   .replace(/[-_]+/g, ' ')
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
 const INITIAL_GALLERY_POSTERS = 8;
+const RANDOM_SEARCH_FALLBACKS = [
+  'Interstellar',
+  'The Dark Knight',
+  'Knives Out',
+  'Spider-Man: Into the Spider-Verse',
+  'The Grand Budapest Hotel',
+  'Mad Max: Fury Road',
+  'Arrival',
+  'The Lord of the Rings',
+];
 const LANDING_POSTERS = POSTER_FILES.map((fileName) => [fileName, getPosterTitle(fileName)]);
 const LANDING_POSTERS_SECOND = [...LANDING_POSTERS].sort(() => Math.random() - 0.5);
 
 const normalizeSearchTerm = (value) => {
   if (typeof value !== 'string') return '';
   return value.trim().replace(/\s+/g, ' ');
+};
+
+const readRandomPickHistory = () => {
+  if (typeof window === 'undefined') return new Set();
+
+  try {
+    const storedHistory = JSON.parse(window.sessionStorage.getItem(RANDOM_PICK_HISTORY_STORAGE_KEY) || '[]');
+    return new Set(Array.isArray(storedHistory) ? storedHistory : []);
+  } catch {
+    return new Set();
+  }
+};
+
+const persistRandomPickHistory = (history) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(RANDOM_PICK_HISTORY_STORAGE_KEY, JSON.stringify([...history]));
+  } catch {
+    // Private browsing or storage limits should not disable random search.
+  }
 };
 
 const readRecentSearches = () => {
@@ -211,8 +244,13 @@ const App = () => {
   const [isWatchlistHydrated, setIsWatchlistHydrated] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
+  const [watchlistSort, setWatchlistSort] = useState('recent');
+  const [watchlistToast, setWatchlistToast] = useState('');
   const detailRequestIdRef = useRef(0);
   const detailAbortControllerRef = useRef(null);
+  const moviesRequestIdRef = useRef(0);
+  const moviesAbortControllerRef = useRef(null);
+  const randomPickHistoryRef = useRef(readRandomPickHistory());
   const isFlushingSyncQueueRef = useRef(false);
 
   const getDeviceKey = useCallback(() => {
@@ -302,7 +340,7 @@ const App = () => {
 
   useDebounce(() => {
     setDebouncedSearchTerm(searchTerm);
-  }, 500, [searchTerm])
+  }, 1000, [searchTerm])
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -355,6 +393,25 @@ const App = () => {
   }, []);
 
   useEffect(() => {
+    const revealTargets = document.querySelectorAll('[data-reveal]');
+    if (!('IntersectionObserver' in window)) {
+      revealTargets.forEach((target) => target.classList.add('is-visible'));
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -48px' });
+
+    revealTargets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, [moviesList.length, trendingMovies.length]);
+
+  useEffect(() => {
     if (!isDetailOpen) return;
 
     const handleEscape = (event) => {
@@ -365,6 +422,17 @@ const App = () => {
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
+  }, [isDetailOpen]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = isDetailOpen ? 'hidden' : previousOverflow;
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
   }, [isDetailOpen]);
 
   useEffect(() => {
@@ -410,6 +478,51 @@ const App = () => {
     setSearchTerm(normalizedQuery);
   };
 
+  const handleRandomSearch = useCallback(() => {
+    const excludedTitles = new Set(
+      recentSearches
+        .concat(searchTerm)
+        .map((title) => normalizeSearchTerm(title).toLowerCase())
+        .filter(Boolean),
+    );
+    const weightedCandidates = [
+      ...watchlist.map((movie) => ({ title: movie.title, weight: 6 })),
+      ...moviesList.slice(0, 20).map((movie) => ({ title: movie.title, weight: 3 })),
+      ...RANDOM_SEARCH_FALLBACKS.map((title) => ({ title, weight: 1 })),
+    ].filter(({ title }) => {
+      const normalizedTitle = normalizeSearchTerm(title).toLowerCase();
+      return normalizedTitle && !excludedTitles.has(normalizedTitle);
+    });
+
+    const candidates = Array.from(new Map(
+      weightedCandidates.map(({ title, weight }) => {
+        const normalizedTitle = normalizeSearchTerm(title);
+        return [normalizedTitle.toLowerCase(), { title: normalizedTitle, weight }];
+      }),
+    ).values());
+    let pool = candidates.filter(({ title }) => !randomPickHistoryRef.current.has(title.toLowerCase()));
+
+    if (pool.length === 0) {
+      randomPickHistoryRef.current.clear();
+      persistRandomPickHistory(randomPickHistoryRef.current);
+      pool = candidates;
+    }
+
+    const totalWeight = pool.reduce((total, candidate) => total + candidate.weight, 0);
+    let cursor = Math.random() * totalWeight;
+
+    const selectedCandidate = pool.find((candidate) => {
+      cursor -= candidate.weight;
+      return cursor <= 0;
+    }) || pool[0];
+
+    if (selectedCandidate) {
+      randomPickHistoryRef.current.add(selectedCandidate.title.toLowerCase());
+      persistRandomPickHistory(randomPickHistoryRef.current);
+      setSearchTerm(selectedCandidate.title);
+    }
+  }, [moviesList, recentSearches, searchTerm, watchlist]);
+
   const toggleWatchlist = (movie) => {
     if (!movie) return;
 
@@ -431,12 +544,14 @@ const App = () => {
 
     if (exists) {
       setWatchlist(normalizedCurrentWatchlist.filter((item) => Number(item.id) !== Number(normalizedMovie.id)));
+      setWatchlistToast(`${normalizedMovie.title} removed from your watchlist`);
       enqueueWatchlistMutation({
         op: 'remove',
         movieId: normalizedMovie.id,
       });
     } else {
       setWatchlist([normalizedMovie, ...normalizedCurrentWatchlist]);
+      setWatchlistToast(`${normalizedMovie.title} added to your watchlist`);
       enqueueWatchlistMutation({
         op: 'add',
         movieId: normalizedMovie.id,
@@ -447,6 +562,8 @@ const App = () => {
     if (isWatchlistSyncConfigured) {
       void flushWatchlistSyncQueue();
     }
+
+    window.setTimeout(() => setWatchlistToast(''), 2600);
   };
 
   const openMovieDetail = async (movie) => {
@@ -525,6 +642,12 @@ const App = () => {
     setSelectedMovie(null);
   };
 
+  const sortedWatchlist = [...watchlist].sort((firstMovie, secondMovie) => {
+    if (watchlistSort === 'title') return firstMovie.title.localeCompare(secondMovie.title);
+    if (watchlistSort === 'rating') return (secondMovie.vote_average || 0) - (firstMovie.vote_average || 0);
+    return new Date(secondMovie.addedAt).getTime() - new Date(firstMovie.addedAt).getTime();
+  });
+
   const loadTrendingMovies = async () => {
     try {
       const movies = await getTrendingSearches();
@@ -537,19 +660,28 @@ const App = () => {
 
   const fetchMovies = useCallback(async (query = '') => {
     const normalizedQuery = normalizeSearchTerm(query);
+    const requestId = moviesRequestIdRef.current + 1;
+    moviesRequestIdRef.current = requestId;
+
+    if (moviesAbortControllerRef.current) {
+      moviesAbortControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    moviesAbortControllerRef.current = controller;
     setIsLoading(true);
     setErrorMessage('');
     try {
       const endpoint = normalizedQuery
         ? `${API_BASE_URL}/search/movie?query=${encodeURIComponent(normalizedQuery)}`
         : `${API_BASE_URL}/discover/movie?sort_by=popularity.desc`;
-      const response = await fetch(endpoint, API_OPTIONS);
+      const response = await fetch(endpoint, { ...API_OPTIONS, signal: controller.signal });
 
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
       const data = await response.json();
-      console.log(data.results);
+      if (requestId !== moviesRequestIdRef.current) return;
       setMoviesList(data.results);
 
       if (normalizedQuery && data.results.length > 0) {
@@ -557,10 +689,11 @@ const App = () => {
         addRecentSearch(normalizedQuery);
       }
     } catch (error) {
+      if (error.name === 'AbortError' || requestId !== moviesRequestIdRef.current) return;
       console.error('Error fetching movies:', error);
       setErrorMessage('Failed to fetch movies. Please try again later.');
     } finally {
-      setIsLoading(false);
+      if (requestId === moviesRequestIdRef.current) setIsLoading(false);
     }
   }, [addRecentSearch]);
 
@@ -571,6 +704,10 @@ const App = () => {
   useEffect(() => {
     loadTrendingMovies();
   }, []);
+
+  const activeSearchTerm = normalizeSearchTerm(searchTerm);
+  const isSearchPending = activeSearchTerm !== normalizeSearchTerm(debouncedSearchTerm);
+  const pageHeading = activeSearchTerm ? `Results for “${activeSearchTerm}”` : 'Popular right now';
 
   return (
     <main>
@@ -606,7 +743,7 @@ const App = () => {
       <Analytics />
 
       <div className="wrapper">
-        <header>
+        <header id='discover' data-reveal>
           <div className="poster-gallery" aria-label="Featured movie posters">
             <div className="poster-gallery-track poster-gallery-track-forward">
               {[...LANDING_POSTERS, ...LANDING_POSTERS].map(([fileName, title], index) => (
@@ -640,11 +777,13 @@ const App = () => {
             setSearchTerm={setSearchTerm}
             recentSearches={recentSearches}
             onSelectRecentSearch={handleSelectRecentSearch}
+            onRandomSearch={handleRandomSearch}
+            isLoading={isLoading || isSearchPending}
           />
         </header>
 
-        {trendingMovies.length > 0 && (
-          <section className="trending">
+        {trendingMovies.length > 0 && !normalizeSearchTerm(searchTerm) && (
+          <section className="trending reveal-delay-1" id='trending' data-reveal>
             <h2 className="text-white text-2xl font-bold mb-4">Trending Searches</h2>
             <ul>
               {trendingMovies.map((movie, index) => (
@@ -683,17 +822,28 @@ const App = () => {
           </section>
         )}
 
-        <section className="watchlist-section">
+        <section className="watchlist-section reveal-delay-2" id='watchlist' data-reveal>
           <div className="watchlist-header">
-            <h2>Watchlist</h2>
-            <span>{watchlist.length}</span>
+            <div>
+              <h2>Watchlist</h2>
+              <p className='section-kicker'>Your saved movies, ready when you are</p>
+            </div>
+            <div className='watchlist-tools'>
+              <label htmlFor='watchlist-sort'>Sort</label>
+              <select id='watchlist-sort' value={watchlistSort} onChange={(event) => setWatchlistSort(event.target.value)}>
+                <option value='recent'>Recent</option>
+                <option value='title'>Title</option>
+                <option value='rating'>Rating</option>
+              </select>
+              <span>{watchlist.length}</span>
+            </div>
           </div>
 
           {watchlist.length === 0 ? (
-            <p className="watchlist-empty">No saved movies yet. Open a movie to add it.</p>
+            <p className="watchlist-empty">No saved movies yet. Use Save on a movie card to build your list.</p>
           ) : (
             <ul className="watchlist-list">
-              {watchlist.map((movie) => (
+              {sortedWatchlist.map((movie) => (
                 <li
                   key={movie.id}
                   className="watchlist-item"
@@ -724,20 +874,35 @@ const App = () => {
           )}
         </section>
 
-        <section className="all-movies">
-          <h2 className="text-white text-2xl font-bold mb-40px mt-[40px]">All Movies</h2>
+        <section className="all-movies reveal-delay-3" id='all-movies' data-reveal>
+            <div className='section-heading'>
+              <div>
+                <p className='section-eyebrow'>Movie library</p>
+                <h2 className="text-white text-2xl font-bold">{pageHeading}</h2>
+              </div>
+              {!isLoading && !isSearchPending && !errorMessage && <span className='result-count'>{moviesList.length} titles</span>}
+            </div>
 
-          {isLoading ? (
-            <Spinner />
+          {isLoading || isSearchPending ? (
+            <ul className='movie-grid-skeletons'>
+              {Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />)}
+            </ul>
           ) : errorMessage ? (
-            <p className="text-red-500">{errorMessage}</p>
+            <div className='api-error-state'>
+              <p>{errorMessage}</p>
+              <button type='button' onClick={() => fetchMovies(debouncedSearchTerm)}>Try again</button>
+            </div>
           ) : (
             <ul>
-              {moviesList.map((movie) => (
+              {moviesList.map((movie, index) => (
                 <MovieCard
                   key={movie.id}
                   movie={movie}
+                  index={index}
+                  hidePopularBadge={!activeSearchTerm}
                   onClick={() => openMovieDetail(movie)}
+                  isSaved={isMovieSaved(movie.id)}
+                  onToggleWatchlist={() => toggleWatchlist(movie)}
                 />
               ))}
             </ul>
@@ -770,19 +935,35 @@ const App = () => {
               </div>
             ) : (
               <>
-                <img
-                  className="movie-detail-poster"
-                  src={getPosterImageSource(selectedMovie.poster_path || selectedMovie.poster_url)}
-                  alt={selectedMovie.title}
-                />
+                <div
+                  className="movie-detail-hero"
+                  style={selectedMovie.backdrop_path ? {
+                    backgroundImage: `linear-gradient(180deg, rgba(9, 13, 29, 0.08), #090d1d 92%), url(${getPosterImageSource(selectedMovie.backdrop_path)})`,
+                  } : undefined}
+                >
+                  <img
+                    className="movie-detail-poster"
+                    src={getPosterImageSource(selectedMovie.poster_path || selectedMovie.poster_url)}
+                    alt={selectedMovie.title}
+                  />
+                </div>
 
                 <div className="movie-detail-content">
                   <div className="movie-detail-meta">
                     <span>{selectedMovie.release_date ? selectedMovie.release_date.split('-')[0] : 'N/A'}</span>
                     <span>⭐ {selectedMovie.vote_average ? selectedMovie.vote_average.toFixed(1) : 'N/A'}</span>
+                    {selectedMovie.runtime ? <span>{selectedMovie.runtime} min</span> : null}
                   </div>
 
                   <h2 id="movie-detail-title">{selectedMovie.title}</h2>
+
+                  {selectedMovie.genres?.length > 0 && (
+                    <div className="movie-detail-genres" aria-label="Genres">
+                      {selectedMovie.genres.map((genre) => (
+                        <span key={genre.id || genre.name}>{genre.name}</span>
+                      ))}
+                    </div>
+                  )}
 
                   <p id="movie-detail-description" className="movie-detail-overview">
                     {selectedMovie.overview || 'No synopsis available for this title yet.'}
@@ -796,6 +977,14 @@ const App = () => {
                     >
                       {isMovieSaved(selectedMovie.id) ? 'Remove from Watchlist' : 'Add to Watchlist'}
                     </button>
+                    <a
+                      className="movie-detail-button movie-detail-secondary"
+                      href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View on TMDB
+                    </a>
                   </div>
                 </div>
               </>
@@ -803,6 +992,8 @@ const App = () => {
           </aside>
         </div>
       )}
+
+      {watchlistToast && <div className='watchlist-toast' role='status'>{watchlistToast}</div>}
     </main>
   )
 }
