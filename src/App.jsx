@@ -38,6 +38,72 @@ const RANDOM_SEARCH_FALLBACKS = [
   'Mad Max: Fury Road',
   'Arrival',
   'The Lord of the Rings',
+  'The Shawshank Redemption',
+  'Pulp Fiction',
+  'Inception',
+  'Fight Club',
+  'Forrest Gump',
+  'The Matrix',
+  'Goodfellas',
+  'The Godfather',
+  'Parasite',
+  'Whiplash',
+  'The Prestige',
+  'Dune',
+  'Oppenheimer',
+  'Everything Everywhere All at Once',
+  'Spider-Man: Across the Spider-Verse',
+  'Guardians of the Galaxy',
+  'Avengers: Endgame',
+  'Black Panther',
+  'Logan',
+  'The Batman',
+  'Top Gun: Maverick',
+  'The Wolf of Wall Street',
+  'The Social Network',
+  'La La Land',
+  'Eternal Sunshine of the Spotless Mind',
+  'Her',
+  'The Truman Show',
+  'Inglourious Basterds',
+  'Django Unchained',
+  'The Hateful Eight',
+  'No Country for Old Men',
+  'There Will Be Blood',
+  'The Green Mile',
+  'Se7en',
+  'The Silence of the Lambs',
+  'Zodiac',
+  'Prisoners',
+  'Gone Girl',
+  'Shutter Island',
+  'The Departed',
+  'Heat',
+  'The Big Lebowski',
+  'Jojo Rabbit',
+  '1917',
+  'The Pianist',
+  'The Intouchables',
+  'Cinema Paradiso',
+  'The Lives of Others',
+  'Coco',
+  'Ratatouille',
+  'WALL-E',
+  'How to Train Your Dragon',
+  'The Incredibles',
+  'Toy Story',
+  'Get Out',
+  'A Quiet Place',
+  'Hereditary',
+  'The Conjuring',
+  'The Menu',
+  'The Nice Guys',
+  'Palm Springs',
+  'Game Night',
+  'The Princess Bride',
+  'Back to the Future',
+  'Jurassic Park',
+  'Pirates of the Caribbean',
 ];
 const LANDING_POSTERS = POSTER_FILES.map((fileName) => [fileName, getPosterTitle(fileName)]);
 const LANDING_POSTERS_SECOND = [...LANDING_POSTERS].sort(() => Math.random() - 0.5);
@@ -478,6 +544,11 @@ const App = () => {
     setSearchTerm(normalizedQuery);
   };
 
+  const handleClearRecentSearches = () => {
+    setRecentSearches([]);
+    persistRecentSearches([]);
+  };
+
   const handleRandomSearch = useCallback(() => {
     const excludedTitles = new Set(
       recentSearches
@@ -777,6 +848,7 @@ const App = () => {
             setSearchTerm={setSearchTerm}
             recentSearches={recentSearches}
             onSelectRecentSearch={handleSelectRecentSearch}
+            onClearRecentSearches={handleClearRecentSearches}
             onRandomSearch={handleRandomSearch}
             isLoading={isLoading || isSearchPending}
           />
@@ -994,6 +1066,14 @@ const App = () => {
       )}
 
       {watchlistToast && <div className='watchlist-toast' role='status'>{watchlistToast}</div>}
+
+      <footer className="footer" aria-label="MovieVerse footer">
+        <p>© 2026 MovieVerse. All rights reserved.</p>
+        <p>
+          Data sourced from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a> and <a href="https://www.imdb.com/" target="_blank" rel="noopener noreferrer">IMDB</a>.
+        </p>
+        <p>Made with <span aria-label="love">♥</span> by MAH(6931).</p>
+      </footer>
     </main>
   )
 }

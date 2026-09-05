@@ -1,6 +1,6 @@
 import React from 'react'
 
-const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecentSearch, onRandomSearch, isLoading }) => {
+const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecentSearch, onClearRecentSearches, onRandomSearch, isLoading }) => {
   const handleSubmit = (event) => {
     event.preventDefault();
   };
@@ -49,6 +49,19 @@ const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecent
 
       {recentSearches.length > 0 && (
         <div className='recent-searches' aria-label='Recent searches'>
+          <div className='recent-searches-header'>
+            <span>Recent searches</span>
+            <button
+              type='button'
+              className='clear-recent-searches'
+              onClick={onClearRecentSearches}
+              aria-label='Clear search history'
+              title='Clear search history'
+            >
+              <span aria-hidden='true'>×</span>
+              <span>Clear</span>
+            </button>
+          </div>
           <div className='recent-searches-list'>
             {recentSearches.map((recentSearch) => (
               <button
