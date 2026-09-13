@@ -77,12 +77,12 @@ const MovieCard = ({ movie: { id, title, vote_average, poster_path, release_date
           <button
             type='button'
             className='movie-action-btn rounded-lg bg-sky-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-sky-600'
-            onClick={(event) => openWithFallbacks(event, `https://cinespot.to/movie/${id}`, [
-              `https://doomflix.to/movie/${id}`,
-              `https://guideflix.to/movie/${id}`,
-              `https://indexflix.to/movie/${id}`,
-              `https://streamiloo.to/movie/${id}`,
-              `https://streamzy.to/movie/${id}`,
+            onClick={(event) => openWithFallbacks(event, `https://cinespot.org/movie/${id}`, [
+              `https://doomflix.org/movie/${id}`,
+              `https://guideflix.org/movie/${id}`,
+              `https://indexflix.org/movie/${id}`,
+              `https://streamiloo.org/movie/${id}`,
+              `https://streamzy.org/movie/${id}`,
             ])}
           >
             Watch
