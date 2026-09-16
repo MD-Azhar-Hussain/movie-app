@@ -178,12 +178,12 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
           <button
             type='button'
             className='movie-card-action movie-card-action-watch'
-            onClick={(event) => openWithFallbacks(event, `https://cinespot.to/movie/${id}`, [
-              `https://indexflix.to/movie/${id}`,
+            onClick={(event) => openWithFallbacks(event, `https://cinespot.org/movie/${id}`, [
+             `https://doomflix.org/movie/${id}`,
+              `https://guideflix.org/movie/${id}`,
+              `https://indexflix.org/movie/${id}`,
+              `https://streamiloo.org/movie/${id}`,
               `https://streamzy.org/movie/${id}`,
-              `https://cinespot.org/movie/${id}`,
-              `https://streamiloo.to/movie/${id}`,
-              `https://iflix.to/movie/${id}`,
             ])}
           >
             Watch
