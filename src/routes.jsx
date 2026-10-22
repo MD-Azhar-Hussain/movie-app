@@ -14,17 +14,22 @@ export const movieLoader = async ({ params }) => {
 
   if (!apiKey) return null;
 
+  const isBrowser = typeof window !== 'undefined';
+  const headers = {
+    accept: 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+
+  // User-Agent is only allowed/needed in Node.js SSR environments
+  if (!isBrowser) {
+    headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+  }
+
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(
         `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`,
-        {
-          headers: {
-            accept: 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-        }
+        { headers }
       );
 
       if (res.status === 429) {
@@ -33,6 +38,11 @@ export const movieLoader = async ({ params }) => {
       }
 
       if (!res.ok) {
+        return null;
+      }
+
+      const contentType = res.headers?.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
         return null;
       }
 

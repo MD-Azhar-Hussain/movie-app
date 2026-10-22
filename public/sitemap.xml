@@ -370,6 +370,18 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://filmpoint.vercel.app/movie/1198654</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://filmpoint.vercel.app/movie/858035</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://filmpoint.vercel.app/movie/1084242</loc>
     <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
@@ -394,6 +406,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://filmpoint.vercel.app/movie/1465063</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://filmpoint.vercel.app/movie/1742441</loc>
     <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
@@ -401,12 +419,6 @@
   </url>
   <url>
     <loc>https://filmpoint.vercel.app/movie/14836</loc>
-    <lastmod>2026-10-22</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://filmpoint.vercel.app/movie/1465063</loc>
     <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -526,18 +538,6 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://filmpoint.vercel.app/movie/122</loc>
-    <lastmod>2026-10-22</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://filmpoint.vercel.app/movie/129</loc>
-    <lastmod>2026-10-22</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
     <loc>https://filmpoint.vercel.app/movie/843352</loc>
     <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
@@ -545,6 +545,12 @@
   </url>
   <url>
     <loc>https://filmpoint.vercel.app/movie/122917</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://filmpoint.vercel.app/movie/120</loc>
     <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
@@ -581,6 +587,12 @@
   </url>
   <url>
     <loc>https://filmpoint.vercel.app/movie/3933</loc>
+    <lastmod>2026-10-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://filmpoint.vercel.app/movie/278</loc>
     <lastmod>2026-10-22</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

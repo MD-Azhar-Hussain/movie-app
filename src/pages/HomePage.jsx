@@ -870,6 +870,9 @@ const HomePage = () => {
                         `https://api.themoviedb.org/3/movie/${movie.movie_id}`,
                         API_OPTIONS
                       );
+                      if (!res.ok) throw new Error('Failed to fetch movie info');
+                      const contentType = res.headers?.get('content-type') || '';
+                      if (!contentType.includes('application/json')) throw new Error('Non-JSON response');
                       const data = await res.json();
 
                       if (data.imdb_id) {

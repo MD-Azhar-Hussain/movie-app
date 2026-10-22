@@ -60,17 +60,16 @@ const MovieDetails = () => {
       try {
         const res = await fetch(
           `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`,
-          {
-            ...API_OPTIONS,
-            headers: {
-              ...API_OPTIONS.headers,
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
-          }
+          API_OPTIONS
         );
 
         if (!res.ok) {
           throw new Error(`Movie not found (HTTP ${res.status})`);
+        }
+
+        const contentType = res.headers?.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error('Received non-JSON response from server');
         }
 
         const data = await res.json();
