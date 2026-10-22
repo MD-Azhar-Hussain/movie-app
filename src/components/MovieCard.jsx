@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 const getPosterImageSource = (posterValue) => {
   if (typeof posterValue !== 'string') return '/no-movie.png';
@@ -108,7 +109,17 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
   return (
     <li className='movie-card' style={{ '--card-accent': accentColor, '--card-delay': `${Math.min(index, 7) * 45}ms` }}>
       <div className='movie-card-poster-wrap'>
-        <button type='button' className='movie-card-poster-button' onClick={onClick} aria-label={`Open details for ${title}`}>
+        <Link
+          to={`/movie/${id}`}
+          className='movie-card-poster-button'
+          onClick={onClick ? (e) => {
+            // If caller handles modal, let it trigger but middle-click/new-tab works as link
+            if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+              onClick(e);
+            }
+          } : undefined}
+          aria-label={`Open details for ${title}`}
+        >
           <img
             className='movie-card-poster'
             src={imageFailed ? '/no-movie.png' : getPosterImageSource(posterPath)}
@@ -126,7 +137,7 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
             <strong>View details</strong>
             <span>{overview || 'Explore the cast, rating, synopsis, and more.'}</span>
           </span>
-        </button>
+        </Link>
         <button
           type='button'
           className={`movie-save-button ${isSaved ? 'is-saved' : ''}`}
@@ -151,7 +162,19 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
 
       <div className='movie-card-body'>
         <div className='movie-card-title-row'>
-          <h3 title={title}>{title}</h3>
+          <h3 title={title}>
+            <Link
+              to={`/movie/${id}`}
+              className="hover:text-purple-400 transition"
+              onClick={onClick ? (e) => {
+                if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                  onClick(e);
+                }
+              } : undefined}
+            >
+              {title}
+            </Link>
+          </h3>
           <span className='movie-card-year'>{year}</span>
         </div>
 
