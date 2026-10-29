@@ -4,6 +4,7 @@ import { Head } from 'vite-react-ssg';
 import MovieSchema from '../components/MovieSchema';
 import Spinner from '../components/Spin';
 import { API_OPTIONS } from '../api/tmdb';
+import { tmdbFetch } from '../api/tmdbProxy';
 
 const WATCHLIST_STORAGE_KEY = 'movie-watchlist';
 
@@ -58,9 +59,8 @@ const MovieDetails = () => {
 
     const fetchMovieDetails = async () => {
       try {
-        const res = await fetch(
-          `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`,
-          API_OPTIONS
+        const res = await tmdbFetch(
+          `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`
         );
 
         if (!res.ok) {

@@ -8,22 +8,40 @@ export const movieLoader = async ({ params }) => {
   const { id } = params;
   if (!id) return null;
 
+  const isBrowser = typeof window !== 'undefined';
+
+  // In the browser, route through the serverless proxy to bypass firewalls
+  if (isBrowser) {
+    const { tmdbFetch } = await import('./api/tmdbProxy');
+
+    try {
+      const res = await tmdbFetch(
+        `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`
+      );
+
+      if (!res.ok) return null;
+
+      const contentType = res.headers?.get('content-type') || '';
+      if (!contentType.includes('application/json')) return null;
+
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  // SSR / SSG: call TMDB directly from the server (no firewall issue)
   const apiKey =
     (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) ||
     getTmdbApiKey();
 
   if (!apiKey) return null;
 
-  const isBrowser = typeof window !== 'undefined';
   const headers = {
     accept: 'application/json',
     Authorization: `Bearer ${apiKey}`,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   };
-
-  // User-Agent is only allowed/needed in Node.js SSR environments
-  if (!isBrowser) {
-    headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-  }
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

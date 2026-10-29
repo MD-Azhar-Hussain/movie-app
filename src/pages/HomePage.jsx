@@ -17,6 +17,7 @@ import { Analytics } from '@vercel/analytics/react'
 import POSTER_FILES from 'virtual:poster-manifest'
 
 import { API_OPTIONS } from '../api/tmdb'
+import { tmdbFetch } from '../api/tmdbProxy'
 const API_BASE_URL = 'https://api.themoviedb.org/3'
 const WATCHLIST_STORAGE_KEY = 'movie-watchlist';
 const WATCHLIST_DEVICE_KEY_STORAGE = 'movie-watchlist-device-key';
@@ -670,8 +671,7 @@ const HomePage = () => {
     setDetailLoading(true);
 
     try {
-      const response = await fetch(`https://api.themoviedb.org/3/movie/${movie.id}`, {
-        ...API_OPTIONS,
+      const response = await tmdbFetch(`https://api.themoviedb.org/3/movie/${movie.id}`, {
         signal: controller.signal,
       });
 
@@ -746,7 +746,7 @@ const HomePage = () => {
       const endpoint = normalizedQuery
         ? `${API_BASE_URL}/search/movie?query=${encodeURIComponent(normalizedQuery)}`
         : `${API_BASE_URL}/discover/movie?sort_by=popularity.desc`;
-      const response = await fetch(endpoint, { ...API_OPTIONS, signal: controller.signal });
+      const response = await tmdbFetch(endpoint, { signal: controller.signal });
 
       if (!response.ok) {
         throw new Error('Network response was not ok');
@@ -866,9 +866,8 @@ const HomePage = () => {
                     const newTab = window.open('', '_blank');
 
                     try {
-                      const res = await fetch(
-                        `https://api.themoviedb.org/3/movie/${movie.movie_id}`,
-                        API_OPTIONS
+                      const res = await tmdbFetch(
+                        `https://api.themoviedb.org/3/movie/${movie.movie_id}`
                       );
                       if (!res.ok) throw new Error('Failed to fetch movie info');
                       const contentType = res.headers?.get('content-type') || '';

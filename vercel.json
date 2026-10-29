@@ -6,7 +6,7 @@
       "destination": "/index.html"
     },
     {
-      "source": "/((?!assets|newposters|.*\\..*).*)",
+      "source": "/((?!api|assets|newposters|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
