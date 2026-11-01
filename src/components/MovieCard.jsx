@@ -1,24 +1,11 @@
-import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
-
-const getPosterImageSource = (posterValue) => {
-  if (typeof posterValue !== 'string') return '/no-movie.png';
-
-  const normalizedPosterValue = posterValue.trim();
-  if (!normalizedPosterValue || normalizedPosterValue === 'null' || normalizedPosterValue === 'undefined') {
-    return '/no-movie.png';
-  }
-
-  if (normalizedPosterValue.startsWith('http://') || normalizedPosterValue.startsWith('https://')) {
-    if (normalizedPosterValue.includes('/w500null') || normalizedPosterValue.includes('/w500undefined')) {
-      return '/no-movie.png';
-    }
-
-    return normalizedPosterValue;
-  }
-
-  return `https://image.tmdb.org/t/p/w500${normalizedPosterValue}`;
-};
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  getPosterImageSource,
+  getPosterSrcSet,
+  PLACEHOLDER_POSTER,
+} from '../lib/poster';
+import { getDownloadProviderUrl, getWatchProviderUrls, openExternalUrl } from '../lib/watchLinks';
 
 const GENRE_NAMES = {
   12: 'Adventure', 14: 'Fantasy', 16: 'Animation', 18: 'Drama', 27: 'Horror',
@@ -41,9 +28,11 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
     runtime,
     certification,
   } = movie;
+
   const [imageFailed, setImageFailed] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [accentColor, setAccentColor] = useState('rgba(124, 93, 218, 0.22)');
+
   const year = releaseDate ? releaseDate.split('-')[0] : 'N/A';
   const rating = typeof voteAverage === 'number' && voteAverage > 0 ? voteAverage.toFixed(1) : 'N/A';
   const genres = genreIds.map((genreId) => GENRE_NAMES[genreId]).filter(Boolean).slice(0, 2);
@@ -69,77 +58,46 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
       // Cross-origin poster images can block pixel sampling; use the theme fallback.
     }
   };
-  const handleActionClick = (event, url) => {
-    event.stopPropagation();
-    window.open(url, '_blank', 'noopener,noreferrer');
-  };
 
-  const openWithFallbacks = async (event, primaryUrl, fallbackUrls = []) => {
-    event.stopPropagation();
-
-    const urls = [primaryUrl, ...fallbackUrls];
-
-    for (const url of urls) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1800);
-
-        await fetch(url, {
-          method: 'HEAD',
-          mode: 'no-cors',
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
-        if (newWindow) {
-          return;
+  const handleOpenDetailsClick = onClick
+    ? (event) => {
+        if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+          onClick(event);
         }
-
-        return;
-      } catch {
-        continue;
       }
-    }
-
-    window.open(primaryUrl, '_blank', 'noopener,noreferrer');
-  };
+    : undefined;
 
   return (
-    <li className='movie-card' style={{ '--card-accent': accentColor, '--card-delay': `${Math.min(index, 7) * 45}ms` }}>
-      <div className='movie-card-poster-wrap'>
+    <li className="movie-card" style={{ '--card-accent': accentColor, '--card-delay': `${Math.min(index, 7) * 45}ms` }}>
+      <div className="movie-card-poster-wrap">
         <Link
           to={`/movie/${id}`}
-          className='movie-card-poster-button'
-          onClick={onClick ? (e) => {
-            // If caller handles modal, let it trigger but middle-click/new-tab works as link
-            if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
-              onClick(e);
-            }
-          } : undefined}
+          className="movie-card-poster-button"
+          onClick={handleOpenDetailsClick}
           aria-label={`Open details for ${title}`}
         >
           <img
-            className='movie-card-poster'
-            src={imageFailed ? '/no-movie.png' : getPosterImageSource(posterPath)}
+            className="movie-card-poster"
+            src={imageFailed ? PLACEHOLDER_POSTER : getPosterImageSource(posterPath)}
+            srcSet={imageFailed ? undefined : getPosterSrcSet(posterPath)}
+            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 220px"
             alt={`${title} poster`}
-            loading='lazy'
-            decoding='async'
+            loading="lazy"
+            decoding="async"
             onLoad={handlePosterLoad}
             onError={() => {
               setImageFailed(true);
               setImageLoaded(true);
             }}
           />
-          {!imageLoaded && <span className='movie-card-image-skeleton' aria-hidden='true' />}
-          <span className='movie-card-preview'>
+          {!imageLoaded && <span className="movie-card-image-skeleton" aria-hidden="true" />}
+          <span className="movie-card-preview">
             <strong>View details</strong>
             <span>{overview || 'Explore the cast, rating, synopsis, and more.'}</span>
           </span>
         </Link>
         <button
-          type='button'
+          type="button"
           className={`movie-save-button ${isSaved ? 'is-saved' : ''}`}
           onClick={(event) => {
             event.stopPropagation();
@@ -148,73 +106,68 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
           aria-label={isSaved ? `Remove ${title} from watchlist` : `Save ${title} to watchlist`}
           aria-pressed={isSaved}
         >
-          <span className='bookmark-icon' aria-hidden='true'>
+          <span className="bookmark-icon" aria-hidden="true">
             {isSaved ? '★' : '☆'}
           </span>
-          <span className='sr-only'>{isSaved ? 'Saved' : 'Save'}</span>
+          <span className="sr-only">{isSaved ? 'Saved' : 'Save'}</span>
         </button>
         {badges.length > 0 && (
-          <div className='movie-card-badges' aria-label='Movie highlights'>
+          <div className="movie-card-badges" aria-label="Movie highlights">
             {badges.map((badge) => <span key={badge}>{badge}</span>)}
           </div>
         )}
       </div>
 
-      <div className='movie-card-body'>
-        <div className='movie-card-title-row'>
+      <div className="movie-card-body">
+        <div className="movie-card-title-row">
           <h3 title={title}>
             <Link
               to={`/movie/${id}`}
               className="hover:text-purple-400 transition"
-              onClick={onClick ? (e) => {
-                if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                  onClick(e);
-                }
-              } : undefined}
+              onClick={handleOpenDetailsClick}
             >
               {title}
             </Link>
           </h3>
-          <span className='movie-card-year'>{year}</span>
+          <span className="movie-card-year">{year}</span>
         </div>
 
-        <div className='movie-card-meta'>
-          <span className='movie-card-rating'>
-            <img src='star.svg' alt='' aria-hidden='true' />
+        <div className="movie-card-meta">
+          <span className="movie-card-rating">
+            <img src="/star.svg" alt="" aria-hidden="true" />
             {rating}
           </span>
-          <span className='movie-card-dot' aria-hidden='true'>
-            •
-          </span>
+          <span className="movie-card-dot" aria-hidden="true">•</span>
           <span>{originalLanguage?.toUpperCase() || 'EN'}</span>
           {runtime ? <span>{runtime}m</span> : null}
           {certification ? <span>{certification}</span> : null}
         </div>
 
         {genres.length > 0 && (
-          <div className='movie-card-genres' aria-label='Genres'>
+          <div className="movie-card-genres" aria-label="Genres">
             {genres.map((genre) => <span key={genre}>{genre}</span>)}
           </div>
         )}
 
-        <div className='movie-card-actions'>
+        <div className="movie-card-actions">
           <button
-            type='button'
-            className='movie-card-action movie-card-action-watch'
-            onClick={(event) => openWithFallbacks(event, `https://cinespot.org/movie/${id}`, [
-             `https://doomflix.org/movie/${id}`,
-              `https://guideflix.org/movie/${id}`,
-              `https://indexflix.org/movie/${id}`,
-              `https://streamiloo.org/movie/${id}`,
-              `https://streamzy.org/movie/${id}`,
-            ])}
+            type="button"
+            className="movie-card-action movie-card-action-watch"
+            onClick={(event) => {
+              event.stopPropagation();
+              const [primaryUrl] = getWatchProviderUrls(id);
+              openExternalUrl(primaryUrl);
+            }}
           >
             Watch
           </button>
           <button
-            type='button'
-            className='movie-card-action movie-card-action-download'
-            onClick={(event) => handleActionClick(event, `https://vidvault.ru/movie/${id}`)}
+            type="button"
+            className="movie-card-action movie-card-action-download"
+            onClick={(event) => {
+              event.stopPropagation();
+              openExternalUrl(getDownloadProviderUrl(id));
+            }}
             aria-label={`Download ${title}`}
           >
             Download
@@ -222,7 +175,7 @@ const MovieCard = ({ movie, onClick, isSaved, onToggleWatchlist, index = 0, hide
         </div>
       </div>
     </li>
-  )
-}
+  );
+};
 
-export default MovieCard
+export default MovieCard;

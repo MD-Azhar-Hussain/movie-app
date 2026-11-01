@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+/**
+ * Build-time only helpers (SSG routes, sitemap and the popular-movies nav).
+ * This module is imported by `vite.config.js` and `scripts/*` — never by the
+ * browser bundle, because it reads the API key from the server environment.
+ */
+
 // Helper to resolve VITE_API_KEY from environment or .env file
 export const getTmdbApiKey = () => {
   if (typeof process !== 'undefined') {
@@ -24,76 +30,115 @@ export const getTmdbApiKey = () => {
   return '';
 };
 
-/**
- * Fetches top popular movie IDs from TMDB API at build time.
- * @param {number} count Total number of movie IDs to fetch (default: 100)
- * @returns {Promise<number[]>} Array of TMDB movie IDs
- */
-export const fetchPopularMovieIds = async (count = 100) => {
-  const apiKey = getTmdbApiKey();
+const TMDB_HEADERS = (apiKey) => ({
+  accept: 'application/json',
+  Authorization: `Bearer ${apiKey}`,
+  'User-Agent': 'Mozilla/5.0 (compatible; FilmPointBot/1.0; +https://filmpoint.vercel.app)',
+});
 
-  if (!apiKey) {
-    console.warn('[SSG] VITE_API_KEY not found. Skipping dynamic route generation.');
-    return [];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Cached summaries so routes, sitemap and nav share a single TMDB pass. */
+const popularCache = { count: 0, movies: [] };
+
+const toSummary = (movie) => ({
+  id: movie.id,
+  title: movie.title || movie.original_title || 'Untitled movie',
+  year: movie.release_date ? movie.release_date.slice(0, 4) : '',
+});
+
+/**
+ * Fetches the most popular movies from TMDB at build time.
+ * @param {number} count Total number of movies to collect (default: 100)
+ * @returns {Promise<Array<{ id: number, title: string, year: string }>>}
+ */
+export const fetchPopularMovieSummaries = async (count = 100) => {
+  if (popularCache.count >= count && popularCache.movies.length >= count) {
+    return popularCache.movies.slice(0, count);
   }
 
-  const movieIds = new Set();
+  const apiKey = getTmdbApiKey();
+  if (!apiKey) {
+    console.warn('[SSG] VITE_API_KEY not found. Skipping dynamic route generation.');
+    return popularCache.movies.slice(0, count);
+  }
+
+  const movies = new Map(popularCache.movies.map((movie) => [movie.id, movie]));
   const pagesToFetch = Math.ceil(count / 20);
 
-  for (let page = 1; page <= pagesToFetch; page++) {
-    let success = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const res = await fetch(`https://api.themoviedb.org/3/movie/popular?language=en-US&page=${page}`, {
-          headers: {
-            accept: 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-        });
+  for (let page = 1; page <= pagesToFetch; page += 1) {
+    let succeeded = false;
 
-        if (res.status === 429) {
-          await new Promise((r) => setTimeout(r, 600));
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        let response;
+        try {
+          response = await fetch(
+            `https://api.themoviedb.org/3/movie/popular?language=en-US&page=${page}`,
+            { headers: TMDB_HEADERS(apiKey), signal: AbortSignal.timeout(15000) }
+          );
+        } catch (fetchError) {
+          if (attempt === 2) {
+            console.warn(`[SSG] Error fetching popular movies page ${page}:`, fetchError.message);
+          } else {
+            await sleep(500 * (attempt + 1));
+          }
           continue;
         }
 
-        if (!res.ok) {
-          console.warn(`[SSG] Failed to fetch TMDB popular page ${page} (HTTP ${res.status})`);
+        if (response.status === 429) {
+          await sleep(600 * (attempt + 1));
+          continue;
+        }
+
+        if (!response.ok) {
+          console.warn(`[SSG] Failed to fetch TMDB popular page ${page} (HTTP ${response.status})`);
           break;
         }
 
-        const data = await res.json();
+        const data = await response.json();
         if (Array.isArray(data.results)) {
           for (const movie of data.results) {
-            if (movie && movie.id) {
-              movieIds.add(movie.id);
-              if (movieIds.size >= count) break;
-            }
+            if (movie && movie.id) movies.set(movie.id, toSummary(movie));
+            if (movies.size >= count) break;
           }
         }
-        success = true;
+
+        succeeded = true;
         break;
       } catch (error) {
         if (attempt === 2) {
           console.warn(`[SSG] Error fetching popular movies page ${page}:`, error.message);
         } else {
-          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+          await sleep(400 * (attempt + 1));
         }
       }
     }
 
-    if (!success) break;
-    if (movieIds.size >= count) break;
+    if (!succeeded) break;
+    if (movies.size >= count) break;
   }
 
-  console.log(`[SSG] Successfully gathered ${movieIds.size} popular movie IDs from TMDB.`);
-  return Array.from(movieIds);
+  const collected = Array.from(movies.values()).slice(0, count);
+  popularCache.count = collected.length;
+  popularCache.movies = collected;
+
+  console.log(`[SSG] Collected ${collected.length} popular movies from TMDB.`);
+  return collected;
 };
 
 /**
- * Fetches top popular movie routes for vite-react-ssg.
+ * @param {number} count Total number of movie IDs to fetch
+ * @returns {Promise<number[]>}
+ */
+export const fetchPopularMovieIds = async (count = 100) => {
+  const summaries = await fetchPopularMovieSummaries(count);
+  return summaries.map((movie) => movie.id);
+};
+
+/**
  * @param {number} count Number of movie routes to generate
- * @returns {Promise<string[]>} Array of route strings like ['/movie/123', ...]
+ * @returns {Promise<string[]>} Route strings like ['/movie/123', ...]
  */
 export const fetchPopularMovieRoutes = async (count = 100) => {
   const ids = await fetchPopularMovieIds(count);

@@ -1,137 +1,174 @@
-🎬 FilmPoint – Movie Discovery App
+# 🎬 Film Point — Movie Discovery App
 
-Live Demo: https://filmpoint.vercel.app/
+Live demo: <https://filmpoint.vercel.app/>
 
-A modern movie discovery web app built with React + Vite + Appwrite + TMDB API.
-Search movies, explore trending searches, and get real-time recommendations.
+A statically prerendered movie discovery app built with **React 19 + Vite + vite-react-ssg**, powered by the **TMDB API** with optional **Appwrite** search analytics and watchlist sync.
 
-🚀 Features
+Search movies, explore trending searches, read full movie pages, and keep a personal watchlist — all without an application server.
 
-Movie search using TMDB API
+---
 
-Trending searches powered by Appwrite Database
+## ✨ Features
 
-Debounced search for performance
+- Movie search with a 1s debounce, request cancellation and stale-response guards
+- Trending searches ranked by count (Appwrite)
+- Full movie pages (`/movie/:id`) with synopsis, cast, genres, ratings, budget/revenue, quick facts, FAQ and "More like this"
+- Genre hub pages (`/genre/:slug`) for all 19 TMDB genres, ranked by current popularity
+- Local-first watchlist (localStorage) with optional background sync to Appwrite, across-tab updates and an offline mutation queue
+- Recent searches (last 8) and a weighted "Random pick"
+- Responsive dark UI, skeleton loaders, reduced-motion support, focus-trapped dialog
+- Static prerendering of the home page, genre hubs and up to 200 popular movie pages
 
-Clean UI with Tailwind / custom styling
 
-Fully deployed on Vercel
+## 🚀 SEO & performance
 
-🛠 Tech Stack
+| Area | Implementation |
+| --- | --- |
+| Prerendering | `vite-react-ssg` emits static HTML for `/`, 19 `/genre/:slug` hubs and up to 200 popular `/movie/:id` pages (dir-style, nested) |
+| Topical depth | 19 genre hub pages with unique intro copy, an instant-answer block and a ranked movie list (targets long-tail queries like "best action movies") |
+| Crawlable link graph | Collapsible `<details>` dropdowns: `PopularLinks` (120 movie pages) and `GenreLinks` (19 genre hubs) on the home page, genre dropdown on every movie page, and 12 "More like this" links per movie page. All anchors stay in the prerendered HTML for crawlers. |
+| Metadata | One `<title>` per page (≤60 chars, keyword first), absolute `canonical`, Open Graph + Twitter cards, `robots` directives |
+| Structured data | `Movie`, `FAQPage`, `BreadcrumbList`, `CollectionPage` + `ItemList`, `WebSite` + `SearchAction`, `Organization` JSON-LD |
+| Direct answers | Every movie page opens with a one-sentence answer plus a "Quick facts" table and a 6-question FAQ (for readers and AI crawlers) |
+| Sitemap | `scripts/generate-sitemap.js` writes 200+ URLs (home + genres + movies) with `lastmod` and image entries for posters |
+| Robots & errors | `public/robots.txt` blocks `/api/`; `public/404.html` + a `noindex` 404 route return a real 404 instead of a soft-404 duplicate homepage |
+| Core Web Vitals | Preconnect to TMDB, `srcset` posters (w342/w500), `fetchPriority="high"` on the LCP poster, lazy-loading elsewhere, no layout-shifting images |
+| Security headers | `vercel.json` adds `X-Content-Type-Options`, `Referrer-Policy`, `X-DNS-Prefetch-Control` and long-lived asset caching |
+| API key safety | The browser only talks to `/api/tmdb`; `VITE_API_KEY` is **not** shipped in the client bundle |
 
-React (Vite)
 
-Appwrite (Database & API)
+## 🛠 Tech stack
 
-TMDB API
+- React 19, React Router 6, Vite 6, `vite-react-ssg` (SSG/SSR)
+- Tailwind CSS v4 + Flowbite React + custom CSS
+- TMDB REST API v3 (serverless proxy)
+- Appwrite (optional search analytics + watchlist sync)
+- Vercel hosting, Vercel Analytics, Speed Insights, GA4
 
-Vercel (Deployment)
+## 📦 Installation
 
-📦 Installation
-git clone https://github.com/MD-Azhar-Hussain/mchck.git
-cd mchck
+```bash
 npm install
+npm run dev      # http://localhost:5173
+npm run build    # prerender + sitemap
+npm run preview
+npm run lint
+```
 
-🔐 Environment Variables
+> `npm run dev` also serves `/api/tmdb` through a Vite middleware that mirrors the Vercel function, so the TMDB key never reaches the browser during development either.
 
-Create a .env file in the root directory and add:
+## 🔐 Environment variables
 
+Create `.env` in the project root:
+
+```env
+# TMDB bearer token (v4). Used server-side only: SSG, dev proxy and the Vercel function.
 VITE_API_KEY=YOUR_TMDB_BEARER_TOKEN
 
+# Canonical site origin used by canonical tags, OG tags and the sitemap.
+VITE_SITE_URL=https://filmpoint.vercel.app
+
+# Appwrite (optional — trending searches + watchlist sync)
 VITE_APPWRITE_PROJECT_ID=YOUR_PROJECT_ID
-VITE_APPWRITE_PROJECT_NAME=Movie-Suggestion
 VITE_APPWRITE_ENDPOINT=https://nyc.cloud.appwrite.io/v1
 VITE_APPWRITE_DATABASE_ID=YOUR_DATABASE_ID
 VITE_APPWRITE_COLLECTION_ID=YOUR_COLLECTION_ID
-
-# Optional: enable watchlist background sync
+# Optional: enables watchlist background sync
 VITE_APPWRITE_WATCHLIST_COLLECTION_ID=YOUR_WATCHLIST_COLLECTION_ID
+```
 
-🔑 How to Get These Keys
-1️⃣ TMDB API Key
+**On Vercel** also add a plain (non-`VITE_`) variable so the serverless proxy can authenticate:
 
-Go to: https://www.themoviedb.org/settings/api
+```env
+TMDB_API_KEY=YOUR_TMDB_BEARER_TOKEN
+```
 
-Create an API key
+Without `TMDB_API_KEY` the proxy returns 500 and the site shows the "Failed to fetch movies" state — there is intentionally no client-side key fallback anymore.
 
-Copy the Bearer Token (v4 auth)
+### How to get the keys
 
-Paste into:
+1. **TMDB** → <https://www.themoviedb.org/settings/api> → create an API key → copy the **API Read Access Token (v4)**.
+2. **Appwrite** → <https://cloud.appwrite.io> → create a project → copy the project ID, endpoint and database/collection IDs.
+3. Appwrite → *Integrations → Platforms* → add a Web platform for `localhost` and `*.vercel.app`.
 
-VITE_API_KEY=eyJhbGciOi...
+## 🗂 Watchlist sync collection (optional)
 
-2️⃣ Appwrite Keys
+Create a collection and set `VITE_APPWRITE_WATCHLIST_COLLECTION_ID`.
 
-Go to: https://cloud.appwrite.io
+| Attribute | Type | Required |
+| --- | --- | --- |
+| `device_key` | string | yes |
+| `movie_id` | integer | yes |
+| `payload` | string | yes |
+| `updated_at` | string | yes |
 
-Create a Project
+Recommended indexes: `device_key`, `movie_id`, and a **unique** combined index on `device_key` + `movie_id`.
 
-Go to Settings → General
+The `device_key` is an anonymous client-generated identifier — it is **not** authentication. Configure collection permissions accordingly.
 
-Copy Project ID → VITE_APPWRITE_PROJECT_ID
+## 🧭 Project structure
 
-Go to Databases
+```
+api/tmdb.js                    Vercel serverless TMDB proxy (TMDB_API_KEY)
+scripts/generate-sitemap.js    Sitemap + robots generator (build step)
+src/api/tmdbProxy.js           Browser helper: always calls /api/tmdb
+src/api/tmdbServer.js          Server-only TMDB fetch (SSR/SSG only)
+src/api/tmdb-ssg.js            Build-time popular movie list (routes + nav + sitemap)
+src/appwrite.js                Search analytics + watchlist sync CRUD
+src/lib/poster.js              TMDB image helpers (w342/w500/w780, srcset)
+src/lib/seo.js                 SITE_URL, canonical/OG helpers, title builders
+src/lib/watchlist.js           Unified watchlist store + offline sync queue
+src/lib/watchLinks.js          External watch/download provider configuration
+src/hooks/useDebounce.js       Small debounce hook (no extra dependency)
+src/pages/HomePage.jsx         Discovery UI, watchlist, detail dialog
+src/pages/MovieDetails.jsx     Prerendered movie page (SEO + JSON-LD + FAQ)
+src/pages/GenrePage.jsx        Prerendered genre hub (long-tail landing pages)
+src/pages/NotFound.jsx         Branded noindex 404 route
+src/lib/genres.js              Canonical 19-genre taxonomy (slugs, blurbs, intros)
+src/components/                MovieCard, Search, MovieSchema, SiteSchema,
+                               FaqSchema, BreadcrumbSchema, PopularLinks,
+                               GenreLinks, Spinner, skeletons
+vite.config.js                 Poster manifest, popular-movie list, dev TMDB proxy, SSG
+```
 
-Create Database → Copy ID → VITE_APPWRITE_DATABASE_ID
+### Data flow
 
-Create Collection → Copy ID → VITE_APPWRITE_COLLECTION_ID
+```
+Browser ──► /api/tmdb?path=/3/…  ──►  TMDB (server-side key)
+   │
+   └── /movie/:id served from prerendered HTML + static loader data
+Build  ──► TMDB (VITE_API_KEY) ──► dist/index.html + dist/movie/<id>/index.html
+```
 
-Endpoint will be:
+## 🧠 Code intelligence (Graphify)
 
-https://nyc.cloud.appwrite.io/v1
+The repo ships a [Graphify](https://github.com/Graphify-Labs/graphify) knowledge-graph setup so AI coding agents (Cline, Copilot, Cursor, Claude Code, Codex, Gemini CLI) can query the architecture instead of grepping it. Tooling only — nothing is bundled or deployed.
 
+**Everything stays inside this folder**: the Python tool is installed into `.tools/venv` (git-ignored), never globally.
 
-Go to Integrations → Platforms
+```bash
+npm run graph:setup                                  # one-time: create .tools/venv + install graphifyy
+npm run graph:build                                  # build/refresh graphify-out/graph.json (no API key)
+npm run graph:query -- "how does the watchlist sync queue work"
+npm run graph:explain -- buildMovieTitle
+```
 
-Add Web App
-
-Hostname: localhost and *.vercel.app
-
-🗂 Optional Watchlist Sync Collection
-
-To enable the local-first + background sync watchlist flow, create a separate Appwrite collection and use its ID in VITE_APPWRITE_WATCHLIST_COLLECTION_ID.
-
-Required attributes:
-- device_key (string, required)
-- movie_id (integer, required)
-- payload (string, required)
-- updated_at (string, required)
-
-Recommended indexes:
-- device_key
-- movie_id
-- optional combined index on device_key + movie_id
-
-If VITE_APPWRITE_WATCHLIST_COLLECTION_ID is not set, watchlist stays fully local (localStorage only).
-
-▶ Run Locally
-npm run dev
+Skills are committed in `.agents/skills/graphify/` and `.copilot/skills/graphify/` (plus `.clinerules/graphify.md` for Cline); the generated graph and the venv stay git-ignored. Full setup, commands and caveats: [`docs/graphify.md`](docs/graphify.md).
 
 
-App runs at:
+## 🌐 Deploy on Vercel
 
-http://localhost:5173
+1. Push the repository to GitHub.
+2. Import it at <https://vercel.com/new>.
+3. Add the environment variables above (`VITE_*` **and** `TMDB_API_KEY`).
+4. Deploy, then submit `https://filmpoint.vercel.app/sitemap.xml` in Google Search Console and Bing Webmaster Tools for fast indexing.
 
-🌐 Deploy on Vercel
+`vercel.json` already configures rewrites, cache headers and `cleanUrls`, so prerendered pages and client-side routes coexist.
 
-Push project to GitHub
+## 👨‍💻 Author
 
-Go to https://vercel.com/new
+**MD Azhar Hussain** — CSE (IoT) · Frontend Developer · Cloud & API Integrations
+GitHub: <https://github.com/MD-Azhar-Hussain>
 
-Import GitHub repo
+Movie data by [TMDB](https://www.themoviedb.org/). This product uses the TMDB API but is not endorsed or certified by TMDB.
 
-Add same .env variables in:
-
-Project → Settings → Environment Variables
-
-Deploy 🎉
-
-📸 Preview
-
-Live Site: https://filmpoint.vercel.app/
-
-👨‍💻 Author
-
-MD Azhar Hussain
-CSE (IoT) | Frontend Developer | Cloud & API Integrations
-GitHub: https://github.com/MD-Azhar-Hussain

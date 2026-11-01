@@ -1,28 +1,32 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, Link, useLoaderData } from 'react-router-dom';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useLoaderData, useParams } from 'react-router-dom';
 import { Head } from 'vite-react-ssg';
 import MovieSchema from '../components/MovieSchema';
+import BreadcrumbSchema from '../components/BreadcrumbSchema';
+import FaqSchema from '../components/FaqSchema';
+import GenreLinks from '../components/GenreLinks';
 import Spinner from '../components/Spin';
-import { API_OPTIONS } from '../api/tmdb';
 import { tmdbFetch } from '../api/tmdbProxy';
+import { getBackdropImageSource, getPosterImageSource, getProfileImageSource } from '../lib/poster';
+import { getGenreSlugById } from '../lib/genres';
+import {
+  absoluteUrl,
+  buildGenrePath,
+  buildMoviePath,
+  buildMovieTitle,
+  SITE_NAME,
+  SITE_URL,
+  truncateText,
+} from '../lib/seo';
 
-const WATCHLIST_STORAGE_KEY = 'movie-watchlist';
-
-const getPosterImageSource = (posterValue) => {
-  if (typeof posterValue !== 'string') return '/no-movie.png';
-  const normalized = posterValue.trim();
-  if (!normalized || normalized === 'null' || normalized === 'undefined') return '/no-movie.png';
-  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
-  return `https://image.tmdb.org/t/p/w500${normalized}`;
-};
-
-const getBackdropImageSource = (backdropValue) => {
-  if (typeof backdropValue !== 'string') return null;
-  const normalized = backdropValue.trim();
-  if (!normalized || normalized === 'null' || normalized === 'undefined') return null;
-  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
-  return `https://image.tmdb.org/t/p/original${normalized}`;
-};
+import {
+  enqueueWatchlistMutation,
+  isMovieInWatchlist,
+  readStoredWatchlist,
+  toggleWatchlistItems,
+  writeStoredWatchlist,
+} from '../lib/watchlist';
+import { getDownloadProviderUrl, getWatchProviderUrls, openExternalUrl } from '../lib/watchLinks';
 
 const MovieDetails = () => {
   const { id } = useParams();
@@ -32,24 +36,15 @@ const MovieDetails = () => {
   const [error, setError] = useState(null);
   const [isSaved, setIsSaved] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const toastTimeoutRef = useRef(null);
 
-  // Sync watchlist status from localStorage
+  // Watchlist status always comes from the shared store used by the home page.
   useEffect(() => {
     if (typeof window === 'undefined' || !movie?.id) return;
-    try {
-      const stored = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      if (stored) {
-        const list = JSON.parse(stored);
-        if (Array.isArray(list)) {
-          setIsSaved(list.some((item) => Number(item.id) === Number(movie.id)));
-        }
-      }
-    } catch {
-      // Ignore localStorage read errors
-    }
+    setIsSaved(isMovieInWatchlist(readStoredWatchlist(), movie.id));
   }, [movie?.id]);
 
-  // Client-side fetch fallback if data was not loaded by SSR/loader
+  // Client-side fetch fallback when the SSG loader produced no data.
   useEffect(() => {
     if (movie && Number(movie.id) === Number(id)) return;
 
@@ -59,109 +54,74 @@ const MovieDetails = () => {
 
     const fetchMovieDetails = async () => {
       try {
-        const res = await tmdbFetch(
+        const response = await tmdbFetch(
           `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`
         );
 
-        if (!res.ok) {
-          throw new Error(`Movie not found (HTTP ${res.status})`);
-        }
+        if (!response.ok) throw new Error(`Movie not found (HTTP ${response.status})`);
 
-        const contentType = res.headers?.get('content-type') || '';
+        const contentType = response.headers?.get('content-type') || '';
         if (!contentType.includes('application/json')) {
           throw new Error('Received non-JSON response from server');
         }
 
-        const data = await res.json();
+        const data = await response.json();
         if (isMounted) {
           setMovie(data);
           setLoading(false);
         }
-      } catch (err) {
+      } catch (fetchError) {
         if (isMounted) {
-          setError(err.message || 'Unable to load movie details');
+          setError(fetchError.message || 'Unable to load movie details');
           setLoading(false);
         }
       }
     };
 
-    fetchMovieDetails();
+    void fetchMovieDetails();
 
     return () => {
       isMounted = false;
     };
   }, [id, movie]);
 
-  const toggleWatchlist = () => {
+  useEffect(() => () => {
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+  }, []);
+
+  const showToast = useCallback((message) => {
+    setToastMessage(message);
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => setToastMessage(''), 3000);
+  }, []);
+
+  const toggleWatchlist = useCallback(() => {
     if (typeof window === 'undefined' || !movie) return;
 
-    try {
-      const stored = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      let list = stored ? JSON.parse(stored) : [];
-      if (!Array.isArray(list)) list = [];
+    const { items, saved, entry } = toggleWatchlistItems(readStoredWatchlist(), movie);
+    if (!entry) return;
 
-      const exists = list.some((item) => Number(item.id) === Number(movie.id));
-      let updated;
-      if (exists) {
-        updated = list.filter((item) => Number(item.id) !== Number(movie.id));
-        setIsSaved(false);
-        showToast(`Removed "${movie.title}" from watchlist`);
-      } else {
-        const itemToSave = {
-          id: movie.id,
-          title: movie.title,
-          poster_path: movie.poster_path,
-          release_date: movie.release_date,
-          vote_average: movie.vote_average,
-          runtime: movie.runtime,
-          overview: movie.overview,
-        };
-        updated = [itemToSave, ...list];
-        setIsSaved(true);
-        showToast(`Added "${movie.title}" to watchlist`);
-      }
-      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.error('Failed to update watchlist', err);
-    }
-  };
+    writeStoredWatchlist(items);
+    setIsSaved(saved);
+    showToast(`"${entry.title}" ${saved ? 'added to' : 'removed from'} your watchlist`);
 
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 3000);
-  };
+    enqueueWatchlistMutation(
+      saved ? { op: 'add', movieId: entry.id, movie: entry } : { op: 'remove', movieId: entry.id }
+    );
+  }, [movie, showToast]);
 
-  const openWithFallbacks = async (event, primaryUrl, fallbackUrls = []) => {
-    event.preventDefault();
-    const urls = [primaryUrl, ...fallbackUrls];
-
-    for (const url of urls) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1800);
-
-        await fetch(url, {
-          method: 'HEAD',
-          mode: 'no-cors',
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        const win = window.open(url, '_blank', 'noopener,noreferrer');
-        if (win) return;
-        return;
-      } catch {
-        // try next fallback
-      }
-    }
-    window.open(primaryUrl, '_blank', 'noopener,noreferrer');
-  };
+  const handleWatchClick = useCallback(() => {
+    if (!movie) return;
+    const [primaryUrl] = getWatchProviderUrls(movie.id);
+    openExternalUrl(primaryUrl);
+  }, [movie]);
 
   if (loading) {
     return (
       <main className="min-h-screen text-white flex flex-col items-center justify-center p-6">
         <Head>
-          <title>Loading Movie Details... - Film Point</title>
+          <title>Loading movie details - {SITE_NAME}</title>
+          <meta name="robots" content="noindex, follow" />
         </Head>
         <div className="flex flex-col items-center gap-4">
           <Spinner />
@@ -175,7 +135,8 @@ const MovieDetails = () => {
     return (
       <main className="min-h-screen text-white flex flex-col items-center justify-center p-6">
         <Head>
-          <title>Movie Not Found - Film Point</title>
+          <title>Movie not found - {SITE_NAME}</title>
+          <meta name="robots" content="noindex, follow" />
         </Head>
         <div className="max-w-md text-center">
           <h1 className="text-3xl font-bold mb-4">Movie Not Available</h1>
@@ -191,15 +152,86 @@ const MovieDetails = () => {
     );
   }
 
-  const rawOverview = movie.overview || 'Discover full synopsis, cast, ratings, and streaming information on Film Point.';
-  const metaDescription = rawOverview.length > 155 ? `${rawOverview.slice(0, 152)}...` : rawOverview;
-  const posterUrl = getPosterImageSource(movie.poster_path);
-  const backdropUrl = getBackdropImageSource(movie.backdrop_path);
+  const rawOverview = movie.overview || `Everything you need to know about ${movie.title}: synopsis, cast, ratings and where to watch.`;
+  const metaDescription = truncateText(rawOverview);
+  const posterUrl = getPosterImageSource(movie.poster_path, 'w500');
+  const socialImage = getPosterImageSource(movie.poster_path, 'w780');
+  const backdropUrl = getBackdropImageSource(movie.backdrop_path, 'w1280');
   const year = movie.release_date ? movie.release_date.split('-')[0] : 'N/A';
   const rating = typeof movie.vote_average === 'number' && movie.vote_average > 0 ? movie.vote_average.toFixed(1) : 'N/A';
-  const pageTitle = `${movie.title} (${year}) - Film Point`;
-  const canonicalUrl = `https://filmpoint.vercel.app/movie/${movie.id}`;
+  const pageTitle = buildMovieTitle(movie);
+  const canonicalUrl = absoluteUrl(buildMoviePath(movie.id));
   const topCast = movie.credits?.cast?.slice(0, 6) || [];
+  const recommendations = (movie.recommendations?.results || [])
+    .filter((item) => item?.id && item?.title && Number(item.id) !== Number(movie.id))
+    .slice(0, 12);
+  const runtimeLabel = movie.runtime ? `${Math.floor(movie.runtime / 60)}h ${movie.runtime % 60}m` : null;
+  const primaryGenre = movie.genres?.[0] || null;
+  const primaryGenreSlug = primaryGenre ? getGenreSlugById(primaryGenre.id) : null;
+
+  const directorNames = (movie.credits?.crew || [])
+    .filter((member) => member.job === 'Director')
+    .map((member) => member.name);
+
+  const topCastNames = (movie.credits?.cast || []).slice(0, 3).map((actor) => actor.name);
+
+  // Direct answer placed within the first ~100 words of the page.
+  const genreNames = (movie.genres || []).map((genre) => genre.name.toLowerCase()).slice(0, 3);
+  const genrePhrase = genreNames.length > 0
+    ? `${/^[aeiou]/.test(genreNames[0]) ? 'an' : 'a'} ${genreNames.join(', ')} film`
+    : 'a film';
+  const quickAnswer = [
+    `${movie.title}${movie.release_date ? ` (${year})` : ''} is ${genrePhrase}`,
+    directorNames.length > 0 ? `directed by ${directorNames[0]}` : null,
+    movie.runtime ? `that runs ${runtimeLabel}` : null,
+    rating !== 'N/A' ? `and holds a ${rating}/10 audience rating on TMDB` : null,
+  ].filter(Boolean).join(' ') + '.';
+
+  const quickFacts = [
+    { label: 'Director', value: directorNames.length > 0 ? directorNames.join(', ') : 'Not listed' },
+    { label: 'Runtime', value: runtimeLabel ? `${runtimeLabel} (${movie.runtime} min)` : 'Not listed' },
+    { label: 'Release date', value: movie.release_date || 'Not listed' },
+    { label: 'Genres', value: movie.genres?.map((genre) => genre.name).join(', ') || 'Not listed' },
+    { label: 'Original language', value: movie.original_language ? movie.original_language.toUpperCase() : 'Not listed' },
+    { label: 'Audience rating', value: rating === 'N/A' ? 'Not rated yet' : `${rating}/10 from ${movie.vote_count?.toLocaleString() || 0} votes` },
+  ];
+
+  const faqItems = [
+    {
+      question: `Who directed ${movie.title}?`,
+      answer: directorNames.length > 0
+        ? `${movie.title} was directed by ${directorNames.join(', ')}.`
+        : `TMDB does not list a director for ${movie.title}.`,
+    },
+    {
+      question: `How long is ${movie.title}?`,
+      answer: movie.runtime
+        ? `${movie.title} runs ${runtimeLabel} (${movie.runtime} minutes).`
+        : `The runtime for ${movie.title} is not listed on TMDB.`,
+    },
+    {
+      question: `What is ${movie.title} about?`,
+      answer: truncateText(movie.overview || `A synopsis for ${movie.title} is not available yet.`, 240),
+    },
+    {
+      question: `When was ${movie.title} released?`,
+      answer: movie.release_date
+        ? `${movie.title} was released on ${movie.release_date}.`
+        : `The release date for ${movie.title} is not listed.`,
+    },
+    {
+      question: `What genre is ${movie.title}?`,
+      answer: movie.genres?.length
+        ? `${movie.title} is classified as ${movie.genres.map((genre) => genre.name).join(', ')}.`
+        : `Genres for ${movie.title} are not listed.`,
+    },
+    {
+      question: `Who stars in ${movie.title}?`,
+      answer: topCastNames.length > 0
+        ? `${movie.title} stars ${topCastNames.join(', ')}.`
+        : `Cast information for ${movie.title} is not listed.`,
+    },
+  ];
 
   return (
     <main className="min-h-screen text-white relative pb-20">
@@ -207,61 +239,75 @@ const MovieDetails = () => {
         <title>{pageTitle}</title>
         <meta name="description" content={metaDescription} />
         <link rel="canonical" href={canonicalUrl} />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
 
-        {/* Open Graph */}
+        <meta property="og:site_name" content={SITE_NAME} />
         <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={metaDescription} />
-        <meta property="og:image" content={posterUrl} />
-        {backdropUrl && <meta property="og:image" content={backdropUrl} />}
+        <meta property="og:image" content={socialImage} />
+        <meta property="og:image:alt" content={`${movie.title} poster`} />
         <meta property="og:type" content="video.movie" />
         <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:locale" content="en_US" />
+        {movie.release_date && <meta property="video:release_date" content={movie.release_date} />}
 
-        {/* Twitter */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={pageTitle} />
         <meta name="twitter:description" content={metaDescription} />
-        <meta name="twitter:image" content={backdropUrl || posterUrl} />
+        <meta name="twitter:image" content={socialImage} />
+
+        <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+        <link rel="preload" as="image" href={posterUrl} fetchPriority="high" />
       </Head>
 
-      {/* Schema.org/Movie JSON-LD */}
       <MovieSchema movie={movie} />
+      <BreadcrumbSchema movie={movie} />
+      <FaqSchema items={faqItems} />
 
       <div className="pattern" />
 
-      {/* Hero Backdrop Banner */}
+      {/* Hero backdrop banner */}
       <div
         className="relative w-full h-[320px] sm:h-[460px] bg-cover bg-center overflow-hidden"
-        style={
-          backdropUrl
-            ? {
-                backgroundImage: `linear-gradient(180deg, rgba(3, 0, 20, 0.4) 0%, rgba(3, 0, 20, 0.95) 100%), url(${backdropUrl})`,
-              }
-            : {
-                background: 'linear-gradient(180deg, #0f0d23 0%, #030014 100%)',
-              }
-        }
+        style={backdropUrl
+          ? {
+              backgroundImage: `linear-gradient(180deg, rgba(3, 0, 20, 0.4) 0%, rgba(3, 0, 20, 0.95) 100%), url(${backdropUrl})`,
+            }
+          : { background: 'linear-gradient(180deg, #0f0d23 0%, #030014 100%)' }}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-sm font-medium text-light-100 hover:text-white bg-black/40 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 transition hover:bg-black/60"
-          >
-            ← Back to Discover
-          </Link>
+          <nav aria-label="Breadcrumb" className="movie-breadcrumb">
+            <Link to="/" className="movie-breadcrumb-home">
+              ← Back to Discover
+            </Link>
+            <span aria-hidden="true">›</span>
+            {primaryGenreSlug ? (
+              <Link to={buildGenrePath(primaryGenreSlug)}>{primaryGenre.name} movies</Link>
+            ) : (
+              <span>Movies</span>
+            )}
+            <span aria-hidden="true">›</span>
+            <span aria-current="page">{movie.title}</span>
+          </nav>
         </div>
       </div>
 
-      {/* Main Content Container */}
+
+      {/* Main content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 -mt-36 sm:-mt-48 relative z-10">
         <div className="flex flex-col md:flex-row gap-8 lg:gap-12 items-start">
-          {/* Poster Column */}
+          {/* Poster column */}
           <div className="w-56 sm:w-72 lg:w-80 flex-shrink-0 mx-auto md:mx-0">
             <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-[#0f0d23] group">
               <img
                 src={posterUrl}
-                alt={movie.title}
+                alt={`${movie.title} poster`}
+                width="500"
+                height="750"
                 className="w-full h-auto object-cover aspect-[2/3] transition duration-300 group-hover:scale-105"
                 loading="eager"
+                fetchPriority="high"
+                decoding="async"
               />
               <button
                 type="button"
@@ -270,37 +316,28 @@ const MovieDetails = () => {
                   isSaved ? 'bg-amber-500 text-black' : 'bg-black/50 text-white hover:bg-black/70'
                 }`}
                 aria-label={isSaved ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                aria-pressed={isSaved}
               >
                 <span className="text-lg leading-none">{isSaved ? '★' : '☆'}</span>
               </button>
             </div>
 
-            {/* Quick Actions */}
             <div className="mt-6 flex flex-col gap-3">
               <button
                 type="button"
-                onClick={(e) =>
-                  openWithFallbacks(e, `https://cinespot.org/movie/${movie.id}`, [
-                    `https://doomflix.org/movie/${movie.id}`,
-                    `https://guideflix.org/movie/${movie.id}`,
-                    `https://indexflix.org/movie/${movie.id}`,
-                    `https://streamiloo.org/movie/${movie.id}`,
-                    `https://streamzy.org/movie/${movie.id}`,
-                  ])
-                }
-                className="w-full py-3.5 px-6 rounded-xl font-bold text-center bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:opacity-95 transition"
+                onClick={handleWatchClick}
+                className="w-full py-3 px-6 rounded-xl font-semibold text-center bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:opacity-95 transition"
               >
                 ▶ Watch Stream
               </button>
 
-              <a
-                href={`https://vidvault.ru/movie/${movie.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => openExternalUrl(getDownloadProviderUrl(movie.id))}
                 className="w-full py-3 px-6 rounded-xl font-medium text-center bg-white/10 hover:bg-white/15 border border-white/10 text-white transition"
               >
                 ⬇ Download Options
-              </a>
+              </button>
 
               <a
                 href={`https://www.themoviedb.org/movie/${movie.id}`}
@@ -313,12 +350,11 @@ const MovieDetails = () => {
             </div>
           </div>
 
-          {/* Details Column */}
+          {/* Details column */}
           <div className="flex-1">
-            {/* Meta badges */}
             <div className="flex flex-wrap items-center gap-3 mb-3 text-sm text-light-200">
               <span className="px-3 py-1 rounded-full bg-white/10 font-semibold text-white">{year}</span>
-              {movie.runtime ? <span>{movie.runtime} min</span> : null}
+              {runtimeLabel ? <span>{runtimeLabel}</span> : null}
               {movie.original_language && (
                 <span className="uppercase px-2 py-0.5 rounded border border-white/20 text-xs">
                   {movie.original_language}
@@ -332,30 +368,50 @@ const MovieDetails = () => {
               </span>
             </div>
 
-            {/* Single H1 for SEO */}
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white mb-3 text-left">
               {movie.title}
             </h1>
 
             {movie.tagline && (
-              <p className="text-lg italic text-purple-300/80 mb-6 font-light">"{movie.tagline}"</p>
+              <p className="text-lg italic text-purple-300/80 mb-4 font-light">&ldquo;{movie.tagline}&rdquo;</p>
             )}
 
-            {/* Genres */}
+            <p className="movie-quick-answer">{quickAnswer}</p>
+
             {movie.genres?.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-6">
-                {movie.genres.map((genre) => (
-                  <span
-                    key={genre.id || genre.name}
-                    className="px-3 py-1 text-xs rounded-full bg-indigo-950/60 border border-indigo-500/30 text-indigo-200"
-                  >
-                    {genre.name}
-                  </span>
-                ))}
+                {movie.genres.map((genre) => {
+                  const genreSlug = getGenreSlugById(genre.id);
+
+                  return genreSlug ? (
+                    <Link
+                      key={genre.id || genre.name}
+                      to={buildGenrePath(genreSlug)}
+                      className="px-3 py-1 text-xs rounded-full bg-indigo-950/60 border border-indigo-500/30 text-indigo-200 hover:bg-indigo-800/60 hover:text-white transition"
+                    >
+                      {genre.name}
+                    </Link>
+                  ) : (
+                    <span
+                      key={genre.id || genre.name}
+                      className="px-3 py-1 text-xs rounded-full bg-indigo-950/60 border border-indigo-500/30 text-indigo-200"
+                    >
+                      {genre.name}
+                    </span>
+                  );
+                })}
               </div>
             )}
 
-            {/* Synopsis Section */}
+            <dl className="quick-facts" aria-label={`Quick facts about ${movie.title}`}>
+              {quickFacts.map((fact) => (
+                <div key={fact.label}>
+                  <dt>{fact.label}</dt>
+                  <dd>{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+
             <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
               <h2 className="text-xl font-bold text-white mb-3 text-left">Synopsis</h2>
               <p className="text-light-100 leading-relaxed text-base sm:text-lg">
@@ -363,7 +419,7 @@ const MovieDetails = () => {
               </p>
             </div>
 
-            {/* Cast Section */}
+
             {topCast.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-xl font-bold text-white mb-4 text-left">Featured Cast</h2>
@@ -376,10 +432,13 @@ const MovieDetails = () => {
                       <div className="w-14 h-14 rounded-full overflow-hidden bg-white/10 mb-2">
                         {actor.profile_path ? (
                           <img
-                            src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
-                            alt={actor.name}
+                            src={getProfileImageSource(actor.profile_path)}
+                            alt={`${actor.name} portrait`}
+                            width="100"
+                            height="100"
                             className="w-full h-full object-cover"
                             loading="lazy"
+                            decoding="async"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-xs text-light-200">
@@ -395,7 +454,20 @@ const MovieDetails = () => {
               </div>
             )}
 
-            {/* Additional Metadata Details */}
+            <section className="faq-section" aria-labelledby="movie-faq-title">
+              <h2 id="movie-faq-title" className="text-xl font-bold text-white mb-3 text-left">
+                Frequently asked questions
+              </h2>
+              <dl>
+                {faqItems.map((item) => (
+                  <div key={item.question}>
+                    <dt>{item.question}</dt>
+                    <dd>{item.answer}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-white/5 border border-white/10 rounded-2xl p-4 text-sm">
               <div>
                 <p className="text-xs text-light-200">Status</p>
@@ -420,27 +492,60 @@ const MovieDetails = () => {
             </div>
           </div>
         </div>
+
+        {recommendations.length > 0 && (
+          <section className="mt-16" aria-labelledby="more-like-this-title">
+            <h2 id="more-like-this-title" className="text-xl font-bold text-white mb-4 text-left">
+              More like this
+            </h2>
+            <ul className="movie-card-links">
+              {recommendations.map((item) => (
+                <li key={item.id}>
+                  <Link to={`/movie/${item.id}`}>
+                    <img
+                      src={getPosterImageSource(item.poster_path, 'w185')}
+                      alt={`${item.title} poster`}
+                      width="185"
+                      height="278"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <span>{item.title}</span>
+                    {item.release_date ? <small>{item.release_date.slice(0, 4)}</small> : null}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <div className="link-dropdowns">
+          <GenreLinks title="Find more movies by genre" />
+        </div>
       </div>
 
-      {/* Watchlist Toast Notification */}
       {toastMessage && (
         <div
-          className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-xl border border-indigo-400/40 text-sm font-medium animate-bounce"
+          className="fixed bottom-6 right-6 z-50 bg-indigo-600 text-white px-5 py-3 rounded-xl shadow-xl border border-indigo-400/40 text-sm font-medium"
           role="status"
         >
           {toastMessage}
         </div>
       )}
 
-      {/* Footer */}
       <footer className="footer mt-24 text-center text-sm text-light-200" aria-label="Film Point footer">
-        <p>© 2026 Film Point. All rights reserved.</p>
+        <p>© 2026 {SITE_NAME}. All rights reserved.</p>
         <p className="mt-1">
           Data sourced from{' '}
           <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" className="underline">
             TMDB
           </a>
-          .
+          . This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </p>
+        <p className="mt-1">
+          <Link to="/" className="underline">Browse all movies</Link>
+          {' · '}
+          <a href={SITE_URL} className="underline">Film Point home</a>
         </p>
       </footer>
     </main>
@@ -448,3 +553,4 @@ const MovieDetails = () => {
 };
 
 export default MovieDetails;
+

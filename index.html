@@ -7,16 +7,27 @@
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
-      gtag('config', 'G-1G4X5FM0CQ');
-      </script>
-    
+      gtag('config', 'G-1G4X5FM0CQ', { anonymize_ip: true });
+    </script>
+
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/title.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Film Point</title>
+    <link rel="apple-touch-icon" href="/title.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#030014" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Speed up the first TMDB poster and API connection -->
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
+    <link rel="preconnect" href="https://api.themoviedb.org" crossorigin />
+    <link rel="dns-prefetch" href="https://image.tmdb.org" />
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>Film Point needs JavaScript enabled to search movies and load details.</noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+

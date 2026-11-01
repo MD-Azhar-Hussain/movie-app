@@ -10,8 +10,21 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+coverage
 *.local
 .github
+
+# Generated at build time by scripts/generate-sitemap.js
+public/sitemap.xml
+
+# Vercel local metadata
+.vercel
+
+# Graphify knowledge graph (generated locally, see docs/graphify.md)
+graphify-out/
+/raw/
+# Project-local Python tool venv (Graphify lives here, never globally)
+.tools/
 
 # Editor directories and files
 .vscode/*

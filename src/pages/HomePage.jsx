@@ -1,35 +1,45 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import Search from '../components/Search'
-import Spinner from '../components/Spin'
-import { useDebounce } from 'react-use'
-import MovieCard from '../components/MovieCard'
-import MovieCardSkeleton from '../components/MovieCardSkeleton'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Head } from 'vite-react-ssg';
+import { Link } from 'react-router-dom';
+import POSTER_FILES from 'virtual:poster-manifest';
+import Search from '../components/Search';
+import Spinner from '../components/Spin';
+import MovieCard from '../components/MovieCard';
+import MovieCardSkeleton from '../components/MovieCardSkeleton';
+import PopularLinks from '../components/PopularLinks';
+import SiteSchema from '../components/SiteSchema';
+import GenreLinks from '../components/GenreLinks';
+import { getTrendingSearches, isWatchlistSyncConfigured, updateSearchCount } from '../appwrite';
 import {
-  deleteWatchlistSyncDocument,
-  getTrendingSearches,
-  getWatchlistSyncDocuments,
-  isWatchlistSyncConfigured,
-  updateSearchCount,
-  upsertWatchlistSyncDocument,
-} from '../appwrite'
-import { Head } from 'vite-react-ssg'
-import { Analytics } from '@vercel/analytics/react'
-import POSTER_FILES from 'virtual:poster-manifest'
+  WATCHLIST_STORAGE_KEY,
+  enqueueWatchlistMutation,
+  fetchRemoteWatchlist,
+  flushSyncQueue,
+  isMovieInWatchlist,
+  mergeWatchlists,
+  readStoredWatchlist,
+  sortWatchlist,
+  toggleWatchlistItems,
+  writeStoredWatchlist,
+} from '../lib/watchlist';
+import { getPosterImageSource } from '../lib/poster';
+import {
+  absoluteUrl,
+  DEFAULT_OG_IMAGE,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+  truncateText,
+} from '../lib/seo';
+import { tmdbFetch } from '../api/tmdbProxy';
+import { useDebounce } from '../hooks/useDebounce';
 
-import { API_OPTIONS } from '../api/tmdb'
-import { tmdbFetch } from '../api/tmdbProxy'
-const API_BASE_URL = 'https://api.themoviedb.org/3'
-const WATCHLIST_STORAGE_KEY = 'movie-watchlist';
-const WATCHLIST_DEVICE_KEY_STORAGE = 'movie-watchlist-device-key';
-const WATCHLIST_SYNC_QUEUE_KEY = 'movie-watchlist-sync-queue';
+const API_BASE_URL = 'https://api.themoviedb.org/3';
 const RECENT_SEARCHES_STORAGE_KEY = 'movie-recent-searches';
 const RANDOM_PICK_HISTORY_STORAGE_KEY = 'movie-random-pick-history';
 const MAX_RECENT_SEARCHES = 8;
-const getPosterTitle = (fileName) => fileName
-  .replace(/\.[^.]+$/, '')
-  .replace(/[-_]+/g, ' ')
-  .replace(/\b\w/g, (letter) => letter.toUpperCase());
 const INITIAL_GALLERY_POSTERS = 8;
+
 const RANDOM_SEARCH_FALLBACKS = [
   'Interstellar',
   'The Dark Knight',
@@ -68,7 +78,6 @@ const RANDOM_SEARCH_FALLBACKS = [
   'The Truman Show',
   'Inglourious Basterds',
   'Django Unchained',
-  'The Hateful Eight',
   'No Country for Old Men',
   'There Will Be Blood',
   'The Green Mile',
@@ -86,7 +95,6 @@ const RANDOM_SEARCH_FALLBACKS = [
   'The Pianist',
   'The Intouchables',
   'Cinema Paradiso',
-  'The Lives of Others',
   'Coco',
   'Ratatouille',
   'WALL-E',
@@ -101,17 +109,53 @@ const RANDOM_SEARCH_FALLBACKS = [
   'The Nice Guys',
   'Palm Springs',
   'Game Night',
-  'The Princess Bride',
   'Back to the Future',
   'Jurassic Park',
   'Pirates of the Caribbean',
 ];
+
+const getPosterTitle = (fileName) => fileName
+  .replace(/\.[^.]+$/, '')
+  .replace(/[-_]+/g, ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
 const LANDING_POSTERS = POSTER_FILES.map((fileName) => [fileName, getPosterTitle(fileName)]);
-const LANDING_POSTERS_SECOND = [...LANDING_POSTERS].sort(() => Math.random() - 0.5);
+const LANDING_POSTERS_SECOND = [...LANDING_POSTERS].reverse();
 
 const normalizeSearchTerm = (value) => {
   if (typeof value !== 'string') return '';
   return value.trim().replace(/\s+/g, ' ');
+};
+
+const readRecentSearches = () => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const storedSearches = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
+    if (!storedSearches) return [];
+
+    const parsedSearches = JSON.parse(storedSearches);
+    if (!Array.isArray(parsedSearches)) return [];
+
+    return parsedSearches
+      .map((search) => normalizeSearchTerm(search))
+      .filter(Boolean)
+      .filter((search, index, array) => array.findIndex((item) => item.toLowerCase() === search.toLowerCase()) === index)
+      .slice(0, MAX_RECENT_SEARCHES);
+  } catch (error) {
+    console.warn('Unable to read recent searches from localStorage.', error);
+    return [];
+  }
+};
+
+const persistRecentSearches = (searches) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(searches));
+  } catch (error) {
+    console.warn('Unable to persist recent searches to localStorage.', error);
+  }
 };
 
 const readRandomPickHistory = () => {
@@ -135,175 +179,12 @@ const persistRandomPickHistory = (history) => {
   }
 };
 
-const readRecentSearches = () => {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const storedSearches = window.localStorage.getItem(RECENT_SEARCHES_STORAGE_KEY);
-    if (!storedSearches) return [];
-
-    const parsedSearches = JSON.parse(storedSearches);
-    if (!Array.isArray(parsedSearches)) return [];
-
-    const normalizedSearches = parsedSearches
-      .map((search) => normalizeSearchTerm(search))
-      .filter(Boolean)
-      .filter((search, index, array) => array.findIndex((item) => item.toLowerCase() === search.toLowerCase()) === index)
-      .slice(0, MAX_RECENT_SEARCHES);
-
-    return normalizedSearches;
-  } catch (error) {
-    console.warn('Unable to read recent searches from localStorage.', error);
-    return [];
-  }
-};
-
-const persistRecentSearches = (searches) => {
-  if (typeof window === 'undefined') return;
-
-  try {
-    window.localStorage.setItem(RECENT_SEARCHES_STORAGE_KEY, JSON.stringify(searches));
-  } catch (error) {
-    console.warn('Unable to persist recent searches to localStorage.', error);
-  }
-};
-
-const createDeviceKey = () => {
-  const timestamp = Date.now().toString(36);
-  const randomPart = Math.random().toString(36).slice(2, 10);
-  return `device_${timestamp}_${randomPart}`;
-};
-
-const normalizeWatchlistEntry = (entry) => {
-  if (!entry || typeof entry !== 'object') return null;
-
-  const movieId = entry.id ?? entry.movie_id;
-  if (movieId === undefined || movieId === null || movieId === '') return null;
-
-  const numericId = Number(movieId);
-  if (Number.isNaN(numericId)) return null;
-
-  return {
-    id: numericId,
-    title: typeof entry.title === 'string' ? entry.title : 'Untitled',
-    poster_path: typeof entry.poster_path === 'string' ? entry.poster_path : '',
-    release_date: typeof entry.release_date === 'string' ? entry.release_date : '',
-    vote_average: typeof entry.vote_average === 'number' ? entry.vote_average : null,
-    overview: typeof entry.overview === 'string' ? entry.overview : '',
-    addedAt: typeof entry.addedAt === 'string' ? entry.addedAt : new Date().toISOString(),
-  };
-};
-
-const normalizeWatchlist = (items) => {
-  if (!Array.isArray(items)) return [];
-
-  const deduped = new Map();
-
-  items.forEach((item) => {
-    const normalized = normalizeWatchlistEntry(item);
-    if (!normalized) return;
-
-    const idKey = String(normalized.id);
-    if (!deduped.has(idKey)) {
-      deduped.set(idKey, normalized);
-    }
-  });
-
-  return Array.from(deduped.values());
-};
-
-const mergeWatchlists = (localItems, remoteItems) => {
-  const merged = new Map();
-
-  normalizeWatchlist(remoteItems).forEach((item) => {
-    merged.set(String(item.id), item);
-  });
-
-  normalizeWatchlist(localItems).forEach((item) => {
-    merged.set(String(item.id), item);
-  });
-
-  return Array.from(merged.values());
-};
-
-const parseSyncQueue = (serializedQueue) => {
-  if (!serializedQueue) return [];
-
-  try {
-    const parsed = JSON.parse(serializedQueue);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed
-      .map((entry) => {
-        if (!entry || typeof entry !== 'object') return null;
-        if (entry.op !== 'add' && entry.op !== 'remove') return null;
-
-        const numericMovieId = Number(entry.movieId);
-        if (Number.isNaN(numericMovieId)) return null;
-
-        const normalizedMovie = entry.op === 'add' ? normalizeWatchlistEntry(entry.movie) : null;
-        if (entry.op === 'add' && !normalizedMovie) return null;
-
-        return {
-          op: entry.op,
-          movieId: numericMovieId,
-          movie: normalizedMovie,
-          enqueuedAt: typeof entry.enqueuedAt === 'string' ? entry.enqueuedAt : new Date().toISOString(),
-        };
-      })
-      .filter(Boolean);
-  } catch {
-    return [];
-  }
-};
-
-const parseRemoteWatchlistDocuments = (documents) => {
-  if (!Array.isArray(documents)) return [];
-
-  const parsed = documents
-    .map((document) => {
-      if (!document || typeof document !== 'object') return null;
-
-      const payload = typeof document.payload === 'string' ? document.payload : '';
-      if (!payload) return null;
-
-      try {
-        return normalizeWatchlistEntry(JSON.parse(payload));
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean);
-
-  return normalizeWatchlist(parsed);
-};
-
-const getPosterImageSource = (posterValue) => {
-  if (typeof posterValue !== 'string') return '/no-movie.png';
-
-  const normalizedPosterValue = posterValue.trim();
-  if (!normalizedPosterValue || normalizedPosterValue === 'null' || normalizedPosterValue === 'undefined') {
-    return '/no-movie.png';
-  }
-
-  if (normalizedPosterValue.startsWith('http://') || normalizedPosterValue.startsWith('https://')) {
-    if (normalizedPosterValue.includes('/w500null') || normalizedPosterValue.includes('/w500undefined')) {
-      return '/no-movie.png';
-    }
-
-    return normalizedPosterValue;
-  }
-
-  return `https://image.tmdb.org/t/p/w500${normalizedPosterValue}`;
-};
-
 const HomePage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [moviesList, setMoviesList] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [trendingMovies, setTrendingMovies] = useState([]);
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedMovie, setSelectedMovie] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
@@ -313,153 +194,99 @@ const HomePage = () => {
   const [detailError, setDetailError] = useState('');
   const [watchlistSort, setWatchlistSort] = useState('recent');
   const [watchlistToast, setWatchlistToast] = useState('');
+  const [syncStatus, setSyncStatus] = useState('');
+
+  const debouncedSearchTerm = useDebounce(searchTerm, 1000);
+
   const detailRequestIdRef = useRef(0);
   const detailAbortControllerRef = useRef(null);
+  const detailPanelRef = useRef(null);
   const moviesRequestIdRef = useRef(0);
   const moviesAbortControllerRef = useRef(null);
   const randomPickHistoryRef = useRef(readRandomPickHistory());
   const isFlushingSyncQueueRef = useRef(false);
+  const toastTimeoutRef = useRef(null);
 
-  const getDeviceKey = useCallback(() => {
-    if (typeof window === 'undefined') return '';
+  /* ---------------------------------------------------------------- *
+   * Watchlist: local storage is the source of truth, Appwrite is a
+   * best-effort background replica.
+   * ---------------------------------------------------------------- */
 
-    const existingKey = window.localStorage.getItem(WATCHLIST_DEVICE_KEY_STORAGE);
-    if (existingKey && typeof existingKey === 'string') return existingKey;
-
-    const newKey = createDeviceKey();
-    window.localStorage.setItem(WATCHLIST_DEVICE_KEY_STORAGE, newKey);
-    return newKey;
-  }, []);
-
-  const getSyncQueue = useCallback(() => {
-    if (typeof window === 'undefined') return [];
-    return parseSyncQueue(window.localStorage.getItem(WATCHLIST_SYNC_QUEUE_KEY));
-  }, []);
-
-  const setSyncQueue = useCallback((queueItems) => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(WATCHLIST_SYNC_QUEUE_KEY, JSON.stringify(queueItems));
-  }, []);
-
-  const enqueueWatchlistMutation = useCallback((mutation) => {
-    if (!isWatchlistSyncConfigured || typeof window === 'undefined' || !mutation) return;
-
-    const existingQueue = getSyncQueue();
-    setSyncQueue([
-      ...existingQueue,
-      {
-        ...mutation,
-        enqueuedAt: new Date().toISOString(),
-      },
-    ]);
-  }, [getSyncQueue, setSyncQueue]);
-
-  const flushWatchlistSyncQueue = useCallback(async () => {
+  const runSyncFlush = useCallback(async () => {
     if (!isWatchlistSyncConfigured || isFlushingSyncQueueRef.current) return;
 
-    const deviceKey = getDeviceKey();
-    if (!deviceKey) return;
-
     isFlushingSyncQueueRef.current = true;
-
     try {
-      const queue = getSyncQueue();
-      if (queue.length === 0) return;
-
-      const nextQueue = [...queue];
-
-      while (nextQueue.length > 0) {
-        const mutation = nextQueue[0];
-
-        if (mutation.op === 'add') {
-          await upsertWatchlistSyncDocument(deviceKey, mutation.movie);
-        } else {
-          await deleteWatchlistSyncDocument(deviceKey, mutation.movieId);
-        }
-
-        nextQueue.shift();
-        setSyncQueue(nextQueue);
-      }
-    } catch (error) {
-      console.warn('Watchlist sync queue flush failed. Will retry later.', error);
+      const { pending } = await flushSyncQueue();
+      setSyncStatus(pending > 0 ? 'Offline: saved locally, will retry' : '');
     } finally {
       isFlushingSyncQueueRef.current = false;
     }
-  }, [getDeviceKey, getSyncQueue, setSyncQueue]);
+  }, []);
 
-  const hydrateWatchlistFromSync = useCallback(async () => {
+  useEffect(() => {
+    const storedWatchlist = readStoredWatchlist();
+    setWatchlist(storedWatchlist);
+    setIsWatchlistHydrated(true);
+
     if (!isWatchlistSyncConfigured) return;
 
-    const deviceKey = getDeviceKey();
-    if (!deviceKey) return;
+    let isMounted = true;
 
-    try {
-      const remoteDocuments = await getWatchlistSyncDocuments(deviceKey);
-      const remoteWatchlist = parseRemoteWatchlistDocuments(remoteDocuments);
+    const hydrateFromRemote = async () => {
+      const remoteWatchlist = await fetchRemoteWatchlist();
+      if (!isMounted || remoteWatchlist.length === 0) return;
+      setWatchlist((previous) => mergeWatchlists(previous, remoteWatchlist));
+    };
 
-      if (remoteWatchlist.length === 0) return;
+    void hydrateFromRemote();
+    void runSyncFlush();
 
-      setWatchlist((previousWatchlist) => mergeWatchlists(previousWatchlist, remoteWatchlist));
-    } catch (error) {
-      console.warn('Watchlist sync hydrate failed. Continuing with local data.', error);
-    }
-  }, [getDeviceKey]);
-
-  useDebounce(() => {
-    setDebouncedSearchTerm(searchTerm);
-  }, 1000, [searchTerm])
+    return () => {
+      isMounted = false;
+    };
+  }, [runSyncFlush]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    try {
-      const savedWatchlist = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
-      if (!savedWatchlist) {
-        setWatchlist([]);
-      } else {
-        const parsedWatchlist = JSON.parse(savedWatchlist);
-        const normalizedWatchlist = normalizeWatchlist(parsedWatchlist);
-        setWatchlist(normalizedWatchlist);
-
-        if (JSON.stringify(normalizedWatchlist) !== savedWatchlist) {
-          window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(normalizedWatchlist));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading watchlist:', error);
-      setWatchlist([]);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify([]));
-      }
-    } finally {
-      setIsWatchlistHydrated(true);
-      if (isWatchlistSyncConfigured) {
-        void hydrateWatchlistFromSync();
-        void flushWatchlistSyncQueue();
-      }
-    }
-  }, [flushWatchlistSyncQueue, hydrateWatchlistFromSync]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
     if (!isWatchlistHydrated) return;
-
-    try {
-      const normalizedWatchlist = normalizeWatchlist(watchlist);
-      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(normalizedWatchlist));
-      if (normalizedWatchlist.length !== watchlist.length) {
-        setWatchlist(normalizedWatchlist);
-      }
-    } catch (error) {
-      console.error('Error saving watchlist:', error);
-    }
+    writeStoredWatchlist(watchlist);
   }, [isWatchlistHydrated, watchlist]);
+
+  // Keep multiple tabs in sync without a refresh.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const handleStorage = (event) => {
+      if (event.key !== WATCHLIST_STORAGE_KEY) return;
+      setWatchlist(readStoredWatchlist());
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
+    if (!isWatchlistSyncConfigured || typeof window === 'undefined') return undefined;
+
+    const handleOnline = () => {
+      void runSyncFlush();
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [runSyncFlush]);
+
+  useEffect(() => () => {
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     setRecentSearches(readRecentSearches());
   }, []);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
     const revealTargets = document.querySelectorAll('[data-reveal]');
     if (!('IntersectionObserver' in window)) {
       revealTargets.forEach((target) => target.classList.add('is-visible'));
@@ -478,50 +305,40 @@ const HomePage = () => {
     return () => observer.disconnect();
   }, [moviesList.length, trendingMovies.length]);
 
-  useEffect(() => {
-    if (!isDetailOpen) return;
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        closeMovieDetail();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isDetailOpen]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return undefined;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = isDetailOpen ? 'hidden' : previousOverflow;
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isDetailOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (detailAbortControllerRef.current) {
-        detailAbortControllerRef.current.abort();
-      }
-    };
+  useEffect(() => () => {
+    if (detailAbortControllerRef.current) detailAbortControllerRef.current.abort();
+    if (moviesAbortControllerRef.current) moviesAbortControllerRef.current.abort();
   }, []);
 
-  useEffect(() => {
-    if (!isWatchlistSyncConfigured || typeof window === 'undefined') return;
+  const isMovieSaved = useCallback((movieId) => isMovieInWatchlist(watchlist, movieId), [watchlist]);
 
-    const handleOnline = () => {
-      void flushWatchlistSyncQueue();
-    };
+  const showWatchlistToast = useCallback((message) => {
+    setWatchlistToast(message);
+    if (toastTimeoutRef.current) window.clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => setWatchlistToast(''), 2600);
+  }, []);
 
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [flushWatchlistSyncQueue]);
+  const toggleWatchlist = useCallback((movie) => {
+    if (!movie) return;
 
-  const isMovieSaved = (movieId) => watchlist.some((movie) => Number(movie.id) === Number(movieId));
+    const { items, saved, entry } = toggleWatchlistItems(watchlist, movie);
+    if (!entry) return;
+
+    setWatchlist(items);
+    showWatchlistToast(`${entry.title} ${saved ? 'added to' : 'removed from'} your watchlist`);
+
+    enqueueWatchlistMutation(
+      saved
+        ? { op: 'add', movieId: entry.id, movie: entry }
+        : { op: 'remove', movieId: entry.id }
+    );
+
+    if (isWatchlistSyncConfigured) void runSyncFlush();
+  }, [runSyncFlush, showWatchlistToast, watchlist]);
+
+  /* ---------------------------------------------------------------- *
+   * Recent searches + personalized random pick
+   * ---------------------------------------------------------------- */
 
   const addRecentSearch = useCallback((query) => {
     const normalizedQuery = normalizeSearchTerm(query);
@@ -538,25 +355,24 @@ const HomePage = () => {
     });
   }, []);
 
-  const handleSelectRecentSearch = (query) => {
+  const handleSelectRecentSearch = useCallback((query) => {
     const normalizedQuery = normalizeSearchTerm(query);
-    if (!normalizedQuery) return;
+    if (normalizedQuery) setSearchTerm(normalizedQuery);
+  }, []);
 
-    setSearchTerm(normalizedQuery);
-  };
-
-  const handleClearRecentSearches = () => {
+  const handleClearRecentSearches = useCallback(() => {
     setRecentSearches([]);
     persistRecentSearches([]);
-  };
+  }, []);
 
   const handleRandomSearch = useCallback(() => {
     const excludedTitles = new Set(
       recentSearches
         .concat(searchTerm)
         .map((title) => normalizeSearchTerm(title).toLowerCase())
-        .filter(Boolean),
+        .filter(Boolean)
     );
+
     const weightedCandidates = [
       ...watchlist.map((movie) => ({ title: movie.title, weight: 6 })),
       ...moviesList.slice(0, 20).map((movie) => ({ title: movie.title, weight: 3 })),
@@ -570,8 +386,9 @@ const HomePage = () => {
       weightedCandidates.map(({ title, weight }) => {
         const normalizedTitle = normalizeSearchTerm(title);
         return [normalizedTitle.toLowerCase(), { title: normalizedTitle, weight }];
-      }),
+      })
     ).values());
+
     let pool = candidates.filter(({ title }) => !randomPickHistoryRef.current.has(title.toLowerCase()));
 
     if (pool.length === 0) {
@@ -594,168 +411,36 @@ const HomePage = () => {
       setSearchTerm(selectedCandidate.title);
     }
   }, [moviesList, recentSearches, searchTerm, watchlist]);
-
-  const toggleWatchlist = (movie) => {
-    if (!movie) return;
-
-    const normalizedMovie = normalizeWatchlistEntry({
-      ...movie,
-      id: movie.id,
-      title: movie.title || movie.name || 'Untitled',
-      poster_path: movie.poster_path || '',
-      release_date: movie.release_date || '',
-      vote_average: movie.vote_average ?? null,
-      overview: movie.overview || '',
-      addedAt: new Date().toISOString(),
-    });
-
-    if (!normalizedMovie) return;
-
-    const normalizedCurrentWatchlist = normalizeWatchlist(watchlist);
-    const exists = normalizedCurrentWatchlist.some((item) => Number(item.id) === Number(normalizedMovie.id));
-
-    if (exists) {
-      setWatchlist(normalizedCurrentWatchlist.filter((item) => Number(item.id) !== Number(normalizedMovie.id)));
-      setWatchlistToast(`${normalizedMovie.title} removed from your watchlist`);
-      enqueueWatchlistMutation({
-        op: 'remove',
-        movieId: normalizedMovie.id,
-      });
-    } else {
-      setWatchlist([normalizedMovie, ...normalizedCurrentWatchlist]);
-      setWatchlistToast(`${normalizedMovie.title} added to your watchlist`);
-      enqueueWatchlistMutation({
-        op: 'add',
-        movieId: normalizedMovie.id,
-        movie: normalizedMovie,
-      });
-    }
-
-    if (isWatchlistSyncConfigured) {
-      void flushWatchlistSyncQueue();
-    }
-
-    window.setTimeout(() => setWatchlistToast(''), 2600);
-  };
-
-  const openMovieDetail = async (movie) => {
-    if (!movie) return;
-
-    const requestId = detailRequestIdRef.current + 1;
-    detailRequestIdRef.current = requestId;
-
-    if (detailAbortControllerRef.current) {
-      detailAbortControllerRef.current.abort();
-    }
-
-    const controller = new AbortController();
-    detailAbortControllerRef.current = controller;
-
-    setIsDetailOpen(true);
-    setDetailError('');
-
-    const hasDetailFields = Boolean(
-      movie.overview ||
-      movie.runtime ||
-      (movie.genres && movie.genres.length > 0) ||
-      movie.vote_average ||
-      movie.release_date
-    );
-
-    if (movie.poster_path && hasDetailFields) {
-      setSelectedMovie(movie);
-      return;
-    }
-
-    setSelectedMovie(movie);
-    setDetailLoading(true);
-
-    try {
-      const response = await tmdbFetch(`https://api.themoviedb.org/3/movie/${movie.id}`, {
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const data = await response.json();
-      if (requestId !== detailRequestIdRef.current || controller.signal.aborted) {
-        return;
-      }
-
-      setSelectedMovie({ ...movie, ...data });
-    } catch (error) {
-      if (error.name === 'AbortError') return;
-      if (requestId !== detailRequestIdRef.current) return;
-
-      console.error('Error fetching movie details:', error);
-      setSelectedMovie(movie);
-      setDetailError('Unable to load movie details right now. Please try again.');
-    } finally {
-      if (requestId === detailRequestIdRef.current && !controller.signal.aborted) {
-        setDetailLoading(false);
-      }
-    }
-  };
-
-  const closeMovieDetail = () => {
-    detailRequestIdRef.current += 1;
-
-    if (detailAbortControllerRef.current) {
-      detailAbortControllerRef.current.abort();
-      detailAbortControllerRef.current = null;
-    }
-
-    setIsDetailOpen(false);
-    setDetailError('');
-    setDetailLoading(false);
-    setSelectedMovie(null);
-  };
-
-  const sortedWatchlist = [...watchlist].sort((firstMovie, secondMovie) => {
-    if (watchlistSort === 'title') return firstMovie.title.localeCompare(secondMovie.title);
-    if (watchlistSort === 'rating') return (secondMovie.vote_average || 0) - (firstMovie.vote_average || 0);
-    return new Date(secondMovie.addedAt).getTime() - new Date(firstMovie.addedAt).getTime();
-  });
-
-  const loadTrendingMovies = async () => {
-    try {
-      const movies = await getTrendingSearches();
-      setTrendingMovies(movies);
-      console.log('Trending Movies:', movies);
-    } catch (error) {
-      console.log(`Error Fetching Trending Movies : ${error}`);
-    }
-  }
+  /* ---------------------------------------------------------------- *
+   * TMDB data loading
+   * ---------------------------------------------------------------- */
 
   const fetchMovies = useCallback(async (query = '') => {
     const normalizedQuery = normalizeSearchTerm(query);
     const requestId = moviesRequestIdRef.current + 1;
     moviesRequestIdRef.current = requestId;
 
-    if (moviesAbortControllerRef.current) {
-      moviesAbortControllerRef.current.abort();
-    }
+    if (moviesAbortControllerRef.current) moviesAbortControllerRef.current.abort();
 
     const controller = new AbortController();
     moviesAbortControllerRef.current = controller;
     setIsLoading(true);
     setErrorMessage('');
+
     try {
       const endpoint = normalizedQuery
         ? `${API_BASE_URL}/search/movie?query=${encodeURIComponent(normalizedQuery)}`
         : `${API_BASE_URL}/discover/movie?sort_by=popularity.desc`;
       const response = await tmdbFetch(endpoint, { signal: controller.signal });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
+      if (!response.ok) throw new Error(`TMDB responded with ${response.status}`);
+
       const data = await response.json();
       if (requestId !== moviesRequestIdRef.current) return;
-      setMoviesList(data.results);
 
-      if (normalizedQuery && data.results.length > 0) {
+      setMoviesList(Array.isArray(data.results) ? data.results : []);
+
+      if (normalizedQuery && data.results?.length > 0) {
         await updateSearchCount(normalizedQuery, data.results[0]);
         addRecentSearch(normalizedQuery);
       }
@@ -769,52 +454,184 @@ const HomePage = () => {
   }, [addRecentSearch]);
 
   useEffect(() => {
-    fetchMovies(debouncedSearchTerm);
+    void fetchMovies(debouncedSearchTerm);
   }, [debouncedSearchTerm, fetchMovies]);
 
   useEffect(() => {
-    loadTrendingMovies();
+    let isMounted = true;
+
+    const loadTrendingMovies = async () => {
+      const movies = await getTrendingSearches();
+      if (isMounted && Array.isArray(movies)) setTrendingMovies(movies);
+    };
+
+    void loadTrendingMovies();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  /* ---------------------------------------------------------------- *
+   * Movie detail dialog
+   * ---------------------------------------------------------------- */
+
+  const closeMovieDetail = useCallback(() => {
+    detailRequestIdRef.current += 1;
+
+    if (detailAbortControllerRef.current) {
+      detailAbortControllerRef.current.abort();
+      detailAbortControllerRef.current = null;
+    }
+
+    setIsDetailOpen(false);
+    setDetailError('');
+    setDetailLoading(false);
+    setSelectedMovie(null);
+  }, []);
+
+  const openMovieDetail = useCallback(async (movie) => {
+    if (!movie) return;
+
+    const requestId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = requestId;
+
+    if (detailAbortControllerRef.current) detailAbortControllerRef.current.abort();
+
+    const controller = new AbortController();
+    detailAbortControllerRef.current = controller;
+
+    setIsDetailOpen(true);
+    setDetailError('');
+    setSelectedMovie(movie);
+
+    const hasDetailFields = Boolean(
+      movie.overview || movie.runtime || movie.genres?.length || movie.vote_average || movie.release_date
+    );
+
+    if (movie.poster_path && hasDetailFields) return;
+
+    setDetailLoading(true);
+
+    try {
+      const response = await tmdbFetch(`https://api.themoviedb.org/3/movie/${movie.id}`, {
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error('Network response was not ok');
+
+      const data = await response.json();
+      if (requestId !== detailRequestIdRef.current || controller.signal.aborted) return;
+
+      setSelectedMovie({ ...movie, ...data });
+    } catch (error) {
+      if (error.name === 'AbortError' || requestId !== detailRequestIdRef.current) return;
+      console.error('Error fetching movie details:', error);
+      setDetailError('Unable to load movie details right now. Please try again.');
+    } finally {
+      if (requestId === detailRequestIdRef.current && !controller.signal.aborted) {
+        setDetailLoading(false);
+      }
+    }
+  }, []);
+
+
+  // Escape to close, focus trap, focus restore and scroll lock for the dialog.
+  useEffect(() => {
+    if (!isDetailOpen || typeof document === 'undefined') return undefined;
+
+    const previouslyFocused = document.activeElement;
+    const panel = detailPanelRef.current;
+    const focusableSelector =
+      'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+    panel?.querySelector(focusableSelector)?.focus?.();
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        closeMovieDetail();
+        return;
+      }
+
+      if (event.key !== 'Tab' || !panel) return;
+
+      const focusable = Array.from(panel.querySelectorAll(focusableSelector))
+        .filter((element) => element.offsetParent !== null);
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [closeMovieDetail, isDetailOpen]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = isDetailOpen ? 'hidden' : previousOverflow;
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isDetailOpen]);
+
+  const sortedWatchlist = useMemo(() => sortWatchlist(watchlist, watchlistSort), [watchlist, watchlistSort]);
 
   const activeSearchTerm = normalizeSearchTerm(searchTerm);
   const isSearchPending = activeSearchTerm !== normalizeSearchTerm(debouncedSearchTerm);
   const pageHeading = activeSearchTerm ? `Results for “${activeSearchTerm}”` : 'Popular right now';
+  const pageTitle = activeSearchTerm ? `${activeSearchTerm} movies - ${SITE_NAME}` : SITE_TITLE;
+  const pageDescription = activeSearchTerm
+    ? truncateText(`Search results, ratings and streaming details for "${activeSearchTerm}" on ${SITE_NAME}.`)
+    : SITE_DESCRIPTION;
+  const canonicalUrl = activeSearchTerm
+    ? absoluteUrl(`/?q=${encodeURIComponent(activeSearchTerm)}`)
+    : absoluteUrl('/');
 
   return (
     <main>
       <Head>
-        <title>Film Point | Discover Trending & Popular Movies</title>
+        <title>{pageTitle}</title>
+        <meta name="description" content={pageDescription} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
 
-        <meta
-          name="description"
-          content="Explore top trending movies, discover new releases, view detailed synopses, and build your personalized watchlist on Film Point."
-        />
-
-        <meta name="keywords" content="movies, trending movies, Film Point, TMDB, movie search, film discovery, watch movies" />
-
-        <meta property="og:title" content="Film Point – Discover Movies You'll Enjoy" />
-        <meta
-          property="og:description"
-          content="A modern movie discovery platform with trending analytics and TMDB integration."
-        />
-        <meta property="og:image" content="/hero.png" />
+        <meta property="og:site_name" content={SITE_NAME} />
+        <meta property="og:title" content={pageTitle} />
+        <meta property="og:description" content={pageDescription} />
+        <meta property="og:image" content={DEFAULT_OG_IMAGE} />
         <meta property="og:type" content="website" />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:locale" content="en_US" />
 
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Film Point – Discover Movies You'll Enjoy" />
-        <meta
-          name="twitter:description"
-          content="Search trending and popular movies with ratings and instant stream access."
-        />
-        <meta name="twitter:image" content="/hero.png" />
+        <meta name="twitter:title" content={pageTitle} />
+        <meta name="twitter:description" content={pageDescription} />
+        <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
       </Head>
+
+      <SiteSchema />
 
       <div className="pattern" />
 
-      <Analytics />
-
       <div className="wrapper">
-        <header id='discover' data-reveal>
+        <header id="discover" data-reveal>
           <div className="poster-gallery" aria-label="Featured movie posters">
             <div className="poster-gallery-track poster-gallery-track-forward">
               {[...LANDING_POSTERS, ...LANDING_POSTERS].map(([fileName, title], index) => (
@@ -840,7 +657,7 @@ const HomePage = () => {
             </div>
           </div>
           <h1>
-            Find <span className="text-gradient">Movies</span> You'll Enjoy
+            Find <span className="text-gradient">Movies</span> You&apos;ll Enjoy
           </h1>
 
           <Search
@@ -854,8 +671,8 @@ const HomePage = () => {
           />
         </header>
 
-        {trendingMovies.length > 0 && !normalizeSearchTerm(searchTerm) && (
-          <section className="trending reveal-delay-1" id='trending' data-reveal>
+        {trendingMovies.length > 0 && !activeSearchTerm && (
+          <section className="trending reveal-delay-1" id="trending" data-reveal>
             <h2 className="text-white text-2xl font-bold mb-4">Trending Searches</h2>
             <ul>
               {trendingMovies.map((movie, index) => (
@@ -866,20 +683,25 @@ const HomePage = () => {
                     const newTab = window.open('', '_blank');
 
                     try {
-                      const res = await tmdbFetch(
+                      const response = await tmdbFetch(
                         `https://api.themoviedb.org/3/movie/${movie.movie_id}`
                       );
-                      if (!res.ok) throw new Error('Failed to fetch movie info');
-                      const contentType = res.headers?.get('content-type') || '';
-                      if (!contentType.includes('application/json')) throw new Error('Non-JSON response');
-                      const data = await res.json();
+                      if (!response.ok) throw new Error('Failed to fetch movie info');
 
-                      if (data.imdb_id) {
+                      const contentType = response.headers?.get('content-type') || '';
+                      if (!contentType.includes('application/json')) throw new Error('Non-JSON response');
+
+                      const data = await response.json();
+
+                      if (data.imdb_id && newTab) {
                         newTab.location.href = `https://www.imdb.com/title/${data.imdb_id}`;
+                        return;
                       }
-                    } catch (err) {
-                      newTab.close();
-                      console.error('Failed to fetch IMDb ID', err);
+
+                      newTab?.close();
+                    } catch (error) {
+                      newTab?.close();
+                      console.error('Failed to open the trending movie', error);
                     }
                   }}
                 >
@@ -896,22 +718,26 @@ const HomePage = () => {
           </section>
         )}
 
-        <section className="watchlist-section reveal-delay-2" id='watchlist' data-reveal>
+
+
+        <section className="watchlist-section reveal-delay-2" id="watchlist" data-reveal>
           <div className="watchlist-header">
             <div>
               <h2>Watchlist</h2>
-              <p className='section-kicker'>Your saved movies, ready when you are</p>
+              <p className="section-kicker">Your saved movies, ready when you are</p>
             </div>
-            <div className='watchlist-tools'>
-              <label htmlFor='watchlist-sort'>Sort</label>
-              <select id='watchlist-sort' value={watchlistSort} onChange={(event) => setWatchlistSort(event.target.value)}>
-                <option value='recent'>Recent</option>
-                <option value='title'>Title</option>
-                <option value='rating'>Rating</option>
+            <div className="watchlist-tools">
+              <label htmlFor="watchlist-sort">Sort</label>
+              <select id="watchlist-sort" value={watchlistSort} onChange={(event) => setWatchlistSort(event.target.value)}>
+                <option value="recent">Recent</option>
+                <option value="title">Title</option>
+                <option value="rating">Rating</option>
               </select>
               <span>{watchlist.length}</span>
             </div>
           </div>
+
+          {syncStatus && <p className="watchlist-sync-status">{syncStatus}</p>}
 
           {watchlist.length === 0 ? (
             <p className="watchlist-empty">No saved movies yet. Use Save on a movie card to build your list.</p>
@@ -933,7 +759,7 @@ const HomePage = () => {
                   aria-label={`Open details for ${movie.title}`}
                 >
                   <img
-                    src={getPosterImageSource(movie.poster_path || movie.poster_url)}
+                    src={getPosterImageSource(movie.poster_path || movie.poster_url, 'w185')}
                     alt={movie.title}
                     loading="lazy"
                     decoding="async"
@@ -942,30 +768,45 @@ const HomePage = () => {
                     <p>{movie.title}</p>
                     <span>{movie.release_date ? movie.release_date.split('-')[0] : 'N/A'}</span>
                   </div>
+                  <Link to={`/movie/${movie.id}`} className="watchlist-open-link">
+                    Open
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
         </section>
 
-        <section className="all-movies reveal-delay-3" id='all-movies' data-reveal>
-            <div className='section-heading'>
-              <div>
-                <p className='section-eyebrow'>Movie library</p>
-                <h2 className="text-white text-2xl font-bold">{pageHeading}</h2>
-              </div>
-              {!isLoading && !isSearchPending && !errorMessage && <span className='result-count'>{moviesList.length} titles</span>}
+        <section className="all-movies reveal-delay-3" id="all-movies" data-reveal>
+          <div className="section-heading">
+            <div>
+              <p className="section-eyebrow">Movie library</p>
+              <h2 className="text-white text-2xl font-bold">{pageHeading}</h2>
             </div>
+            {!isLoading && !isSearchPending && !errorMessage && (
+              <span className="result-count" aria-live="polite">{moviesList.length} titles</span>
+            )}
+          </div>
 
           {isLoading || isSearchPending ? (
-            <ul className='movie-grid-skeletons'>
+            <ul className="movie-grid-skeletons">
               {Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />)}
             </ul>
           ) : errorMessage ? (
-            <div className='api-error-state'>
+            <div className="api-error-state">
               <p>{errorMessage}</p>
-              <button type='button' onClick={() => fetchMovies(debouncedSearchTerm)}>Try again</button>
+              <button type="button" onClick={() => fetchMovies(debouncedSearchTerm)}>Try again</button>
             </div>
+          ) : moviesList.length === 0 ? (
+            activeSearchTerm ? (
+              <p className="watchlist-empty">
+                No movies matched &ldquo;{activeSearchTerm}&rdquo;. Try another title or clear the search.
+              </p>
+            ) : (
+              <ul className="movie-grid-skeletons">
+                {Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />)}
+              </ul>
+            )
           ) : (
             <ul>
               {moviesList.map((movie, index) => (
@@ -982,11 +823,21 @@ const HomePage = () => {
             </ul>
           )}
         </section>
+
+        <div className="link-dropdowns">
+          <GenreLinks title="Browse by genre" />
+          <PopularLinks
+            limit={120}
+            title="Popular movie pages"
+            description="Jump straight into a movie page to read the synopsis, cast, ratings and where to watch."
+          />
+        </div>
       </div>
 
       {isDetailOpen && selectedMovie && (
         <div className="movie-detail-backdrop" onClick={closeMovieDetail}>
           <aside
+            ref={detailPanelRef}
             className="movie-detail-panel"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
@@ -1012,7 +863,7 @@ const HomePage = () => {
                 <div
                   className="movie-detail-hero"
                   style={selectedMovie.backdrop_path ? {
-                    backgroundImage: `linear-gradient(180deg, rgba(9, 13, 29, 0.08), #090d1d 92%), url(${getPosterImageSource(selectedMovie.backdrop_path)})`,
+                    backgroundImage: `linear-gradient(180deg, rgba(9, 13, 29, 0.08), #090d1d 92%), url(${getPosterImageSource(selectedMovie.backdrop_path, 'w780')})`,
                   } : undefined}
                 >
                   <img
@@ -1051,6 +902,13 @@ const HomePage = () => {
                     >
                       {isMovieSaved(selectedMovie.id) ? 'Remove from Watchlist' : 'Add to Watchlist'}
                     </button>
+                    <Link
+                      className="movie-detail-button movie-detail-secondary"
+                      to={`/movie/${selectedMovie.id}`}
+                      onClick={closeMovieDetail}
+                    >
+                      Open full page
+                    </Link>
                     <a
                       className="movie-detail-button movie-detail-secondary"
                       href={`https://www.themoviedb.org/movie/${selectedMovie.id}`}
@@ -1067,17 +925,26 @@ const HomePage = () => {
         </div>
       )}
 
-      {watchlistToast && <div className='watchlist-toast' role='status'>{watchlistToast}</div>}
+      {watchlistToast && <div className="watchlist-toast" role="status">{watchlistToast}</div>}
 
-      <footer className="footer" aria-label="MovieVerse footer">
-        <p>© 2026 MovieVerse. All rights reserved.</p>
+      <footer className="footer" aria-label="Film Point footer">
+        <p>© 2026 {SITE_NAME}. All rights reserved.</p>
         <p>
-          Data sourced from <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a> and <a href="https://www.imdb.com/" target="_blank" rel="noopener noreferrer">IMDB</a>.
+          Data sourced from{' '}
+          <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses
+          the TMDB API but is not endorsed or certified by TMDB.
         </p>
-        <p>Made with <span aria-label="love">♥</span> by MAH(6931).</p>
+        <p>
+          <Link to="/">Discover</Link>
+          {' · '}
+          <Link to="/#watchlist">Watchlist</Link>
+          {' · '}
+          <Link to="/#trending">Trending</Link>
+        </p>
       </footer>
     </main>
-  )
-}
+  );
+};
 
-export default HomePage
+export default HomePage;
+

@@ -2,76 +2,65 @@ import React from 'react';
 import App from './App';
 import HomePage from './pages/HomePage';
 import MovieDetails from './pages/MovieDetails';
-import { getTmdbApiKey } from './api/tmdb-ssg';
+import GenrePage from './pages/GenrePage';
+import NotFound from './pages/NotFound';
+import { getGenreBySlug } from './lib/genres';
 
 export const movieLoader = async ({ params }) => {
   const { id } = params;
   if (!id) return null;
 
-  const isBrowser = typeof window !== 'undefined';
-
-  // In the browser, route through the serverless proxy to bypass firewalls
-  if (isBrowser) {
-    const { tmdbFetch } = await import('./api/tmdbProxy');
-
-    try {
-      const res = await tmdbFetch(
-        `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`
-      );
-
-      if (!res.ok) return null;
-
-      const contentType = res.headers?.get('content-type') || '';
-      if (!contentType.includes('application/json')) return null;
-
-      return await res.json();
-    } catch {
-      return null;
-    }
+  // Server rendering (SSG build): call TMDB directly. The dynamic import is
+  // gated by `import.meta.env.SSR` so the API key is tree-shaken out of the
+  // client bundle.
+  if (import.meta.env.SSR) {
+    const { fetchMovieDetails } = await import('./api/tmdbServer');
+    return fetchMovieDetails(id);
   }
 
-  // SSR / SSG: call TMDB directly from the server (no firewall issue)
-  const apiKey =
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) ||
-    getTmdbApiKey();
+  // Browser: always go through the same-origin serverless proxy.
+  const { tmdbFetch } = await import('./api/tmdbProxy');
 
-  if (!apiKey) return null;
+  try {
+    const response = await tmdbFetch(
+      `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`
+    );
 
-  const headers = {
-    accept: 'application/json',
-    Authorization: `Bearer ${apiKey}`,
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  };
+    if (!response.ok) return null;
 
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(
-        `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`,
-        { headers }
-      );
+    const contentType = response.headers?.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
 
-      if (res.status === 429) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-        continue;
-      }
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
 
-      if (!res.ok) {
-        return null;
-      }
+export const genreLoader = async ({ params }) => {
+  const genre = getGenreBySlug(params.slug);
+  if (!genre) return null;
 
-      const contentType = res.headers?.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        return null;
-      }
+  const query = `discover/movie?with_genres=${genre.id}&sort_by=popularity.desc&vote_count.gte=50&include_adult=false&language=en-US`;
 
-      return await res.json();
-    } catch {
-      if (attempt === 2) return null;
-      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
-    }
+  if (import.meta.env.SSR) {
+    const { fetchTmdbServer } = await import('./api/tmdbServer');
+    return fetchTmdbServer(`/${query}`);
   }
 
-  return null;
+  const { tmdbFetch } = await import('./api/tmdbProxy');
+
+  try {
+    const response = await tmdbFetch(`https://api.themoviedb.org/3/${query}`);
+    if (!response.ok) return null;
+
+    const contentType = response.headers?.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
+
+    return await response.json();
+  } catch {
+    return null;
+  }
 };
 
 export const routes = [
@@ -89,8 +78,13 @@ export const routes = [
         loader: movieLoader,
       },
       {
+        path: 'genre/:slug',
+        element: <GenrePage />,
+        loader: genreLoader,
+      },
+      {
         path: '*',
-        element: <HomePage />,
+        element: <NotFound />,
       },
     ],
   },

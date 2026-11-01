@@ -1,8 +1,29 @@
 # FilmPoint / MovieVerse: Project Interview Guide
 
-This document is the source-of-truth briefing for understanding, explaining, reviewing, and interviewing on this repository. It is written from the implementation currently in the repository, not from assumptions about a future architecture.
+This document is the source-of-truth briefing for understanding, explaining, reviewing, and interviewing on this repository. It is written from the implementation currently in the repository, not from assumptions about a future architecture. The older sections were written against a client-only version of the app; the **Refactor log** below records what changed, and the sections that follow have been updated where they were wrong.
+
+## 0. Refactor log (2026-11 hardening + SEO pass)
+
+- **TMDB key no longer ships to the browser.** The client only calls the same-origin `/api/tmdb` proxy. `VITE_API_KEY` is read in Node only (SSG loader, `vite.config.js` dev proxy, `scripts/`). Verified: `dist/assets/*.js` contains zero bearer tokens.
+- **Routing moved to `src/pages/`** with `vite-react-ssg` prerendering `/` plus up to 200 popular `/movie/:id` pages. `src/App.jsx` is now only the layout shell.
+- **One watchlist implementation** (`src/lib/watchlist.js`) shared by the home page and the movie page; includes normalized entries, cross-tab `storage` sync, coalescing offline mutation queue (max one mutation per movie) and best-effort Appwrite flush.
+- **Removed dead code:** `src/api/tmdb.js` (`API_OPTIONS`), `src/App.css`, the 248-line commented stylesheet at the top of `src/index.css`, duplicated poster-URL helpers (now `src/lib/poster.js`), duplicated `<Analytics />`, and the `react-use` dependency (replaced by `src/hooks/useDebounce.js`).
+- **SEO:** single `<title>` per page (template title removed from `index.html`), absolute canonical/OG/Twitter URLs, `Movie` + `BreadcrumbList` + `WebSite`/`SearchAction`/`Organization` JSON-LD, 120 crawlable internal links on the home page (`PopularLinks`) and 12 "More like this" links per movie page, 187-URL sitemap, `robots.txt` disallowing `/api/`, security + cache headers in `vercel.json`.
+- **Deleted assets** `public/hero.png` and `public/hero-bg.png` are no longer referenced: the hero pattern is a CSS gradient and OG images use `/title.png`.
+- **Lint is green** (Node globals configured for `api/`, `scripts/`, `vite.config.js`, `src/api/tmdb-ssg.js`, `src/api/tmdbServer.js`), and `npm run build` prerenders successfully.
+
+## 0.1 SEO content + indexing pass (2026-11, second pass)
+
+- **Topical hub pages:** `/genre/:slug` for all 19 TMDB genres, prerendered at build time (`src/lib/genres.js` taxonomy, `src/pages/GenrePage.jsx`, `genreLoader` in `src/routes.jsx`). Each has unique intro copy, an instant-answer block, a 20-movie ranked list, `CollectionPage` + `ItemList` + `BreadcrumbList` JSON-LD and its own canonical.
+- **Direct answers / depth on movie pages:** one-sentence answer under the H1, a six-field "Quick facts" table and a six-question FAQ section backed by `FAQPage` JSON-LD (`src/components/FaqSchema.jsx`).
+- **Crawlable link graph expanded:** `PopularLinks` (120 movies) + `GenreLinks` (19 genres) rendered as native `<details>` dropdowns on the home page, genre dropdown on movie pages, and 12 "More like this" links per movie page. Anchors remain in the prerendered HTML, so crawlability is unchanged by the collapse.
+- **Title discipline:** `buildTitle()` keeps titles at ≤60 characters with the keyword first (`Best Action Movies - Film Point` is 31 chars).
+- **Real 404s:** `public/404.html` plus a `noindex` `*` route, and `vercel.json` no longer rewrites unknown paths to `/index.html` (that rewrite previously produced soft-404 duplicate content).
+- **Sitemap:** 206 URLs (home + 19 genres + 186 movies) with `lastmod` and `<image:image>` poster entries for image search.
+- Verified after the change: `npm run lint` passes, `npm run build` prerenders 206 pages, and every JSON-LD block parses.
 
 ## 1. Executive Summary
+
 
 This is a client-side React movie discovery application built with Vite. Users can:
 
@@ -17,51 +38,67 @@ This is a client-side React movie discovery application built with Vite. Users c
 
 There is no application server in this repository. The browser calls TMDB and Appwrite directly. Vite injects `VITE_*` environment variables into the browser bundle at build time. Vercel serves the generated static site and provides cache headers for static assets.
 
-The central orchestration component is `src/App.jsx`. `src/components` contains focused UI components, `src/api/tmdb.js` owns the TMDB request headers, and `src/appwrite.js` owns Appwrite persistence operations.
+The central orchestration component is `src/pages/HomePage.jsx` (with `src/pages/MovieDetails.jsx` for prerendered movie pages). `src/components` contains focused UI components, `src/api/tmdbProxy.js` + `api/tmdb.js` own the TMDB request path (no key in the browser), and `src/appwrite.js` owns Appwrite persistence operations.
 
 ## 2. AI Context Brief
 
 Use the following facts when answering questions about this project:
 
 - Product: movie discovery and personal watchlist web app.
-- Runtime: browser-rendered React 19 application.
-- Build tool: Vite, using the `rolldown-vite` package override.
+- Runtime: browser-rendered React 19 application, prerendered to static HTML at build time.
+- Build tool: Vite 6 with `vite-react-ssg` (no `rolldown-vite` override).
 - Styling: Tailwind CSS v4 through the Vite plugin plus custom CSS in `src/index.css`.
-- Primary data provider: TMDB REST API v3.
+- Primary data provider: TMDB REST API v3, always through the `/api/tmdb` proxy in the browser.
 - Optional backend services: Appwrite Database for trending search analytics and watchlist synchronization.
 - Local persistence: `localStorage` for the watchlist, recent searches, device key, and pending sync queue; `sessionStorage` for random-pick history.
-- Deployment: Vercel static deployment.
+- Deployment: Vercel static deployment plus one serverless function (`api/tmdb.js`).
 - Authentication: none. The device key is an anonymous client-generated identifier, not user authentication.
-- State ownership: almost all application state is local to `App` with React hooks.
+- State ownership: page-level React hooks (`src/pages/HomePage.jsx`, `src/pages/MovieDetails.jsx`).
 - Main consistency strategy: local-first watchlist updates followed by best-effort background synchronization.
 - Search strategy: controlled input -> one-second debounce -> abort previous request -> TMDB search/discover request.
 - Stale request protection: both `AbortController` and monotonically increasing request IDs are used.
 - External failure behavior: search errors are shown with a retry action; Appwrite failures generally degrade to local-only behavior.
-- Verified status on 2026-09-12: `npm run lint` passes and `npm run build` passes.
+- Verified status on 2026-11-01: `npm run lint` passes and `npm run build` passes (187 prerendered pages).
 
 ## 3. Repository Map
 
 | Path | Responsibility |
 | --- | --- |
-| `index.html` | HTML shell, Google Analytics bootstrap, favicon, root mount node, viewport metadata. |
-| `src/main.jsx` | React entry point; imports global CSS; mounts `App` under `StrictMode`, `HelmetProvider`, and Vercel Speed Insights. |
-| `src/App.jsx` | Main state machine, API orchestration, persistence, rendering, modal, watchlist, trending UI, and page composition. |
-| `src/api/tmdb.js` | Shared TMDB `fetch` options and bearer authorization header. |
+| `index.html` | HTML shell, Google Analytics bootstrap, favicon, preconnect hints, root mount node, viewport metadata. |
+| `src/main.jsx` | React entry point; imports global CSS; mounts the route tree with `ViteReactSSG` and guards stale static-loader-data responses. |
+| `src/App.jsx` | Layout shell only: `<Outlet />`, Vercel Analytics and Speed Insights. |
+| `src/routes.jsx` | Route table plus `movieLoader` (SSR branch gated by `import.meta.env.SSR`, browser branch via the proxy). |
+| `src/pages/HomePage.jsx` | Discovery UI: search, trending, watchlist, random pick, detail dialog, SEO head block. |
+| `src/pages/MovieDetails.jsx` | Prerendered movie page: metadata, JSON-LD, cast, "More like this" links, watchlist toggle. |
+| `src/api/tmdbProxy.js` | Browser-only helper; always calls `/api/tmdb` (never TMDB directly). |
+| `src/api/tmdbServer.js` | Server-only TMDB fetch with retry; imported behind `import.meta.env.SSR` so the key stays out of the client bundle. |
+| `src/api/tmdb-ssg.js` | Build-time popular-movie list (SSG routes, popular-links nav, sitemap) with an in-process cache. |
+| `api/tmdb.js` | Vercel serverless TMDB proxy using `TMDB_API_KEY`; validates the `/3/` path prefix and sets CDN cache headers. |
+| `src/lib/poster.js` | TMDB image URL helpers (`w342`/`w500`/`w780`, `srcset`, placeholder handling). |
+| `src/lib/seo.js` | `SITE_URL`, canonical/OG helpers, title and description builders. |
+| `src/lib/watchlist.js` | Single watchlist store: normalization, merge, cross-tab sync, coalescing offline queue, Appwrite flush. |
+| `src/lib/watchLinks.js` | External watch/download provider configuration and safe new-tab helper. |
+| `src/hooks/useDebounce.js` | Local debounce hook (replaces `react-use`). |
 | `src/appwrite.js` | Conditional Appwrite client setup and database CRUD helpers. |
 | `src/components/Search.jsx` | Controlled search form, clear button, random pick, recent-search controls. |
-| `src/components/MovieCard.jsx` | Movie card presentation, poster fallback, image accent extraction, save/watch/download actions. |
+| `src/components/MovieCard.jsx` | Movie card presentation, poster `srcset`, image accent extraction, save/watch/download actions. |
 | `src/components/MovieCardSkeleton.jsx` | Loading placeholder card. |
-| `src/components/Spin.jsx` | Flowbite loading spinner used by the detail modal. |
-| `src/index.css` | Tailwind imports, theme, layout, responsive styling, animation, modal, watchlist, and card styles. |
-| `src/App.css` | Older standalone movie action styles; currently not imported by `main.jsx`. |
-| `vite.config.js` | React, Tailwind, Flowbite plugins and the custom virtual poster-manifest plugin. |
-| `eslint.config.js` | Flat ESLint configuration for JavaScript/JSX and React hooks/refresh rules. |
+| `src/components/MovieSchema.jsx` | `Movie` JSON-LD (cast, director, trailer, rating, publisher). |
+| `src/components/BreadcrumbSchema.jsx` | `BreadcrumbList` JSON-LD for movie pages. |
+| `src/components/SiteSchema.jsx` | `WebSite` + `SearchAction` + `Organization` JSON-LD. |
+| `src/components/PopularLinks.jsx` | Server-rendered internal links to prerendered movie pages (crawlable link graph). |
+| `src/components/Spin.jsx` | Flowbite loading spinner used by the detail dialog. |
+| `src/index.css` | Tailwind imports, theme, layout, responsive styling, animation, modal, watchlist, card and link-block styles. |
+| `vite.config.js` | React/Tailwind/Flowbite plugins, poster manifest, popular-movie list, dev TMDB proxy and SSG options. |
+| `scripts/generate-sitemap.js` | Writes `sitemap.xml` (public + dist) and keeps `robots.txt` in sync. |
+| `eslint.config.js` | Flat ESLint configuration for browser code plus a Node override for server/build files. |
 | `package.json` | Scripts and runtime/build dependencies. |
 | `public/newposters/` | Local landing-page poster assets discovered at build time. |
-| `public/hero-bg.png`, `hero.png`, `no-movie.png`, `search.svg`, `star.svg` | Static visual and fallback assets. |
-| `vercel.json` | Cache headers for poster files and hashed build assets. |
+| `public/no-movie.png`, `search.svg`, `star.svg`, `title.png` | Static visual, favicon and fallback assets. |
+| `vercel.json` | Rewrites, `cleanUrls`, security headers and cache headers. |
 | `.env` | Local secrets/configuration; ignored by Git and must never be committed. |
 | `dist/` | Generated production output; do not edit manually. |
+
 
 ## 4. Runtime Architecture
 
@@ -235,7 +272,8 @@ The full movie object is serialized into `payload`. This is simple and flexible,
 
 ### TMDB
 
-`src/api/tmdb.js` reads `VITE_API_KEY` and creates shared GET headers with `Authorization: Bearer ...`. `App.jsx` uses the shared options for search, discovery, details, and trending-to-IMDb lookup. Poster URLs are converted from TMDB paths to `https://image.tmdb.org/t/p/w500...`.
+`api/tmdb.js` (Vercel) and the Vite dev middleware both read `VITE_API_KEY`/`TMDB_API_KEY` on the server and attach `Authorization: Bearer ...` themselves; the browser only sends `path` plus TMDB query params to `/api/tmdb`. `src/pages/HomePage.jsx` uses `tmdbFetch` for search, discovery and the trending-to-IMDb lookup, while `src/lib/poster.js` converts TMDB paths into `https://image.tmdb.org/t/p/...` URLs (with `srcset` variants).
+
 
 ### Appwrite
 
@@ -331,30 +369,36 @@ There are no unit, integration, end-to-end, or component tests in the repository
 
 ## 13. Known Risks and Bugs to Be Ready to Explain
 
-### High priority
+### Resolved in the 2026-11 pass
 
-- **Client-exposed TMDB credential:** `VITE_API_KEY` is bundled into the browser. Treat it as public and rotate any exposed credential. Use a server-side proxy for real secrecy and rate limiting.
-- **Third-party watch/download links:** Movie cards construct links to external streaming/download domains. This is a major trust, compliance, and availability risk and should not be presented as an unreviewed production feature.
-- **Anonymous device identity:** The generated device key is not authentication. Anyone who obtains it may be able to access that device's Appwrite watchlist, depending on collection permissions.
+- **Client-exposed TMDB credential** → the browser now only calls `/api/tmdb`; `VITE_API_KEY` is read exclusively in Node (SSG, dev proxy, sitemap). Verified by grepping the built bundles for the token (`0` matches).
+- **Queue growth from repeated toggles** → `enqueueWatchlistMutation` collapses previous mutations for the same movie, so at most one queued operation exists per movie.
+- **Duplicated/divergent watchlist logic** (home page vs movie page) → both use `src/lib/watchlist.js`, so `addedAt`, normalization and sync behave identically.
+- **Duplicate `<title>` tags** → template title removed from `index.html`; each page emits exactly one title.
+- **Missing crawlable internal links** → home page renders 120 static links and each movie page renders 12 "More like this" links.
+- **Dead assets / 404s for `hero.png` / `hero-bg.png`** → removed references; the hero pattern is a CSS gradient and OG images use `/title.png`.
+- **`npm run lint` failing** → Node globals override added; lint is green.
+
+### High priority (still open)
+
+- **Third-party watch/download links:** Movie cards and movie pages link to external streaming/download domains configured in `src/lib/watchLinks.js`. This is a trust/compliance risk; the module exists so the list can be reviewed, swapped or emptied in one place.
+- **Anonymous device identity:** The generated device key is not authentication. Anyone who obtains it may be able to read that device's Appwrite watchlist, depending on collection permissions. A unique `device_key + movie_id` index is still recommended.
+- **No test suite:** the project has no automated tests yet (see §12).
 
 ### Medium priority
 
-- **Race in search analytics:** Search results are committed before awaiting `updateSearchCount`, which is good for UX, but repeated searches can create concurrent count updates and lost increments in Appwrite's read-then-write pattern.
-- **Race in watchlist upsert:** `listDocuments` followed by create/update is not atomic. Two tabs can create duplicate documents unless a unique index or server-side transaction enforces uniqueness.
-- **Queue growth:** Every add/remove is appended. Repeated toggles can create redundant operations. Coalescing by movie ID would reduce work.
-- **Remote deletion semantics:** An empty remote response does not clear local data. This is intentional local-first behavior but means server deletions do not propagate.
+- **Race in search analytics:** `updateSearchCount` is still a read-then-write; concurrent searches can lose increments.
+- **Race in watchlist upsert:** `listDocuments` followed by create/update is not atomic; two tabs can create duplicate documents unless a unique index is enforced.
+- **Remote deletion semantics:** An empty remote response does not clear local data (intentional local-first behaviour).
 - **Payload schema drift:** JSON movie payloads can become incompatible as TMDB fields or normalization rules change.
-- **Image URL trust:** Remote image URLs are placed into CSS background images and `img` sources. The current values mostly originate from TMDB, but a future user-controlled source would need validation.
+- **Image URL trust:** Remote image URLs are placed into CSS background images and `img` sources. Current values mostly originate from TMDB, but a future user-controlled source would need validation.
 
 ### Lower priority / maintainability
 
-- `App.jsx` contains API orchestration, storage, synchronization, UI, and domain transformations; custom hooks would reduce coupling.
-- Poster URL normalization is duplicated in `App.jsx`, `MovieCard.jsx`, and `appwrite.js`.
-- `App.css` appears to contain obsolete styles not imported by the entry point.
-- README branding and clone path differ from the current `FilmPoint`/`MovieVerse` text and repository path.
-- `VITE_APPWRITE_PROJECT_NAME` is documented/read from `.env` but not used by `appwrite.js`.
-- `Spin.jsx` depends on Flowbite for a small loading UI while most styling is custom/Tailwind; dependency usage could be simplified.
-- `loadTrendingMovies` is an async function called in an effect without cancellation, although its result is small and failure is non-fatal.
+- `HomePage.jsx` is still large (search, watchlist, dialog and SEO in one file); extracting the detail dialog into its own component would help.
+- `VITE_APPWRITE_PROJECT_NAME` was removed from the documented env list because `appwrite.js` never used it.
+- `Spin.jsx` depends on Flowbite for a small loading UI while most styling is custom/Tailwind; the dependency could be dropped.
+
 
 ## 14. Recommended Improvement Roadmap
 
