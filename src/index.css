@@ -1,4 +1,22 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
+
+/* Self-hosted fonts (public/fonts) — same-origin + preloaded, so there is no
+   third-party round trip and no late font swap. `optional` is the safety net. */
+@font-face {
+  font-family: "DM Sans";
+  font-style: normal;
+  font-weight: 100 1000;
+  font-display: optional;
+  src: url("/fonts/dm-sans-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Bebas Neue";
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url("/fonts/bebas-neue-latin.woff2") format("woff2");
+}
 @import "flowbite-react/plugin/tailwindcss";
 @source "../.flowbite-react/class-list.json";
 
@@ -560,8 +578,10 @@
 
   .all-movies {
     @apply space-y-9;
-    content-visibility: auto;
-    contain-intrinsic-size: 900px;
+    /* No content-visibility here: the reserved 900px placeholder was nothing
+       like the real grid height on mobile (~3300px), so revealing it caused the
+       site's largest layout shift (measured 0.79 CLS). Rendering the cards
+       eagerly is cheaper than that shift. */
 
     & ul {
       @apply grid grid-cols-1 gap-5 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4;
@@ -2447,6 +2467,27 @@ h1 {
   }
 }
 
+/* Skeleton chips mirror the genre chip row of a real card so heights match */
+.skeleton-chip {
+  display: inline-block;
+  width: 3.5rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.skeleton-chip-short {
+  width: 2.25rem;
+}
+
+.movie-card-skeleton .movie-card-title-row {
+  min-height: 1.35rem;
+}
+
+.movie-card-skeleton .skeleton-line {
+  margin-top: 0;
+}
+
 /* Data-unavailable state (loader returned nothing) */
 .data-error {
   display: grid;
@@ -2571,14 +2612,6 @@ h1 {
   .search-row {
     gap: 0.5rem;
   }
-}
-
-/* Content that appears after hydration (trending + watchlist) sits below the
-   fold, so reserve its box instead of shifting the page when it fills in. */
-.trending,
-.watchlist-section {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
 }
 
 /* Large desktops: one more column instead of stretching the cards. */

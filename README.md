@@ -38,6 +38,30 @@ Search movies, explore trending searches, read full movie pages, and keep a pers
 | API key safety | The browser only talks to `/api/tmdb`; `VITE_API_KEY` is **not** shipped in the client bundle |
 
 
+### Measured performance (mobile Lighthouse, local preview build)
+
+| Metric | Reported before | After this pass |
+| --- | --- | --- |
+| Performance | 65 | **100** |
+| Accessibility | 95 | **100** |
+| Cumulative Layout Shift | 0.516 | **0.049** |
+| Total page weight | 5,005 KiB | **1,432 KiB** |
+| Largest Contentful Paint / Speed Index (localhost, no simulated latency) | 2.8 s | 0.9 s |
+| Total Blocking Time | 50 ms | **30 ms** |
+
+Reproduce locally:
+
+```bash
+npm run build && npm run preview      # serves the real prerendered build
+npx lighthouse http://localhost:4173/ --chrome-flags="--headless=new"
+```
+
+Two notes: localhost has no network latency (PageSpeed simulates Slow 4G, so its
+FCP/LCP will be higher), and the largest remaining layout-shift risk was
+`content-visibility: auto` on the movie grid — see the comment in
+`src/index.css`. Gallery posters are optimised once with
+`npm run posters:optimize` (3.92 MB → 466 KB) and committed.
+
 ## 🛠 Tech stack
 
 - React 19, React Router 6, Vite 6, `vite-react-ssg` (SSG/SSR)
@@ -213,6 +237,7 @@ That message is the loader's failure state, and the browser console now says whi
 
 ### Other common cases
 
+- **Trending section never appears + a 403 in the console** — the Appwrite search collection is not readable anonymously. Either allow read access for guests (Users role) on the collection, or disable the request with `VITE_APPWRITE_TRENDING=off`. The console error is cached per session so it does not repeat on navigation.
 - **Accessing `/genre/…` or `/movie/…` directly returns the home page** — that is a host without rewrites. `vercel.json` covers production; `npm run preview` covers local (see `cleanUrlPreviewMiddleware` in `vite.config.js`).
 - **Build prerenders only `/`** — no `VITE_API_KEY` at build time; the sitemap will say `Using 0 movie URLs`.
 - **Watchlist does not sync between devices** — expected: it is local-first, and sync only runs when `VITE_APPWRITE_WATCHLIST_COLLECTION_ID` is configured.

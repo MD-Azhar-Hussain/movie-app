@@ -39,6 +39,10 @@ const API_BASE_URL = 'https://api.themoviedb.org/3';
 const RECENT_SEARCHES_STORAGE_KEY = 'movie-recent-searches';
 const RANDOM_PICK_HISTORY_STORAGE_KEY = 'movie-random-pick-history';
 const MAX_RECENT_SEARCHES = 8;
+// TMDB returns 20 results per page, so the placeholder grid renders the same
+// number of cards. Swapping 8 placeholders for 20 cards was the site's largest
+// layout shift (0.52 CLS): the row count changed under the visible content.
+const SKELETON_CARDS = 20;
 
 const RANDOM_SEARCH_FALLBACKS = [
   'Interstellar',
@@ -653,7 +657,7 @@ const HomePage = () => {
 
       <div className="wrapper">
         <header id="discover" data-reveal>
-          <div className="poster-gallery" aria-label="Featured movie posters">
+          <div className="poster-gallery" aria-hidden="true">
             <div className="poster-gallery-track poster-gallery-track-forward">
               {[...LANDING_POSTERS, ...LANDING_POSTERS].map(([url], index) => (
                 <img
@@ -822,7 +826,7 @@ const HomePage = () => {
 
           {isLoading || isSearchPending ? (
             <ul className="movie-grid-skeletons">
-              {Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />)}
+              {Array.from({ length: SKELETON_CARDS }, (_, index) => <MovieCardSkeleton key={index} />)}
             </ul>
           ) : errorMessage ? (
             <div className="api-error-state">
@@ -836,7 +840,7 @@ const HomePage = () => {
               </p>
             ) : (
               <ul className="movie-grid-skeletons">
-                {Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />)}
+                {Array.from({ length: SKELETON_CARDS }, (_, index) => <MovieCardSkeleton key={index} />)}
               </ul>
             )
           ) : (

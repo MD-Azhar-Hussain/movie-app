@@ -39,7 +39,6 @@ const Search = ({ searchTerm, setSearchTerm, recentSearches = [], onSelectRecent
           type='button'
           className='random-search-button'
           onClick={onRandomSearch}
-          aria-label='Choose a personalized random movie search'
           title='Pick a movie based on your activity'
         >
           <span className='random-search-icon' aria-hidden='true'>✦</span>

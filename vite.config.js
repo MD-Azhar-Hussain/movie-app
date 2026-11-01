@@ -214,6 +214,14 @@ const tmdbProxyPlugin = () => ({
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    // Vercel provides the analytics/speed-insights scripts only on its own
+    // platform. Flag the build so local previews do not request them (and log
+    // two 404s in the console).
+    __VERCEL_DEPLOYMENT__: JSON.stringify(
+      Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_BUILDER)
+    ),
+  },
   plugins: [
     posterManifestPlugin(),
     popularMoviesPlugin(),

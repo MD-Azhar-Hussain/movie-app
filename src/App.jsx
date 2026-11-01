@@ -7,8 +7,12 @@ const App = () => {
   return (
     <div className="app-container min-h-screen bg-[#030014] text-white">
       <Outlet />
-      <Analytics />
-      <SpeedInsights />
+      {typeof __VERCEL_DEPLOYMENT__ !== 'undefined' && __VERCEL_DEPLOYMENT__ && (
+        <>
+          <Analytics />
+          <SpeedInsights />
+        </>
+      )}
     </div>
   );
 };

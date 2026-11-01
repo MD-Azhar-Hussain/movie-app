@@ -9,6 +9,31 @@ const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
 
 const isSearchTrackingConfigured = Boolean(projectID && databaseID && collectionID && endpoint);
 
+// Trending is optional: set VITE_APPWRITE_TRENDING=off to skip the request
+// entirely (useful when the collection does not allow anonymous reads, which
+// otherwise logs a 403 in the browser console on every page load).
+const isTrendingDisabled =
+  String(import.meta.env.VITE_APPWRITE_TRENDING || '').toLowerCase() === 'off';
+const TRENDING_FAILURE_KEY = 'movie-trending-unavailable';
+
+const hasTrendingFailedThisSession = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.sessionStorage.getItem(TRENDING_FAILURE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const rememberTrendingFailure = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(TRENDING_FAILURE_KEY, '1');
+  } catch {
+    // Session storage may be unavailable.
+  }
+};
+
 const client = isSearchTrackingConfigured ||
   Boolean(projectID && databaseID && endpoint && watchlistCollectionID)
   ? new Client().setEndpoint(endpoint).setProject(projectID)
@@ -56,7 +81,8 @@ export const updateSearchCount = async (searchTerm, movie) => {
 };
 
 export const getTrendingSearches = async () => {
-  if (!isSearchTrackingConfigured || !database) return [];
+  if (!isSearchTrackingConfigured || !database || isTrendingDisabled) return [];
+  if (hasTrendingFailedThisSession()) return [];
 
   try {
     const result = await database.listDocuments(databaseID, collectionID, [
@@ -65,7 +91,10 @@ export const getTrendingSearches = async () => {
     ]);
     return result.documents;
   } catch (error) {
-    console.warn('Unable to load trending searches:', error);
+    // 401/403 means the collection is not readable anonymously. Remember it for
+    // the session so the console is not spammed on every navigation.
+    if ([401, 403].includes(Number(error?.code))) rememberTrendingFailure();
+    console.warn('Trending searches are unavailable:', error?.message || error);
     return [];
   }
 };

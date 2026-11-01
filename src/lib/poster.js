@@ -45,7 +45,11 @@ export const getPosterSrcSet = (posterValue) => {
   if (!isUsableValue(posterValue) || isAbsoluteUrl(posterValue.trim())) return undefined;
 
   const normalized = posterValue.trim();
-  return [`${TMDB_IMAGE_BASE}/w342${normalized} 342w`, `${TMDB_IMAGE_BASE}/w500${normalized} 500w`].join(', ');
+  return [
+    `${TMDB_IMAGE_BASE}/w185${normalized} 185w`,
+    `${TMDB_IMAGE_BASE}/w342${normalized} 342w`,
+    `${TMDB_IMAGE_BASE}/w500${normalized} 500w`,
+  ].join(', ');
 };
 
 export const getProfileImageSource = (profilePath, size = 'w185') => {

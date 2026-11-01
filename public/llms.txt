@@ -1,0 +1,26 @@
+# Film Point
+
+> Movie discovery, ratings and watchlists. Data from TMDB.
+
+Film Point is a movie discovery site: search films, browse curated genre hubs, read a
+full page per film (synopsis, cast, runtime, ratings, FAQ) and keep a local watchlist.
+Pages are prerendered to static HTML.
+
+## Key pages
+
+- [Home / discovery](https://filmpoint.vercel.app/): search plus trending, watchlist and popular titles
+- [Genre hubs](https://filmpoint.vercel.app/genre/action): 19 pages, e.g. /genre/comedy, /genre/horror, /genre/science-fiction
+- [Movie pages](https://filmpoint.vercel.app/movie/27205): one page per film with structured data and an FAQ
+- [Sitemap](https://filmpoint.vercel.app/sitemap.xml) · [robots.txt](https://filmpoint.vercel.app/robots.txt)
+
+## Notes for automated agents
+
+- Content is server-rendered HTML; no JavaScript is required to read titles, ratings, cast, genres or the FAQ.
+- Structured data is emitted as JSON-LD: `Movie`, `FAQPage`, `BreadcrumbList`, `CollectionPage`/`ItemList`, `WebSite` and `Organization`.
+- Movie metadata comes from TMDB. Film Point does not host or stream video; "Watch"/"Download" links lead to third-party sites.
+- Page counts: 1 home + 19 genre hubs + ~200 popular movie pages.
+- Crawling is welcome; `/api/` is disallowed and there are no paywalls or interstitials.
+
+## Contact
+
+https://github.com/the-user99999
