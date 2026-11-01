@@ -5,6 +5,7 @@ import MovieSchema from '../components/MovieSchema';
 import BreadcrumbSchema from '../components/BreadcrumbSchema';
 import FaqSchema from '../components/FaqSchema';
 import GenreLinks from '../components/GenreLinks';
+import SiteFooter from '../components/SiteFooter';
 import Spinner from '../components/Spin';
 import { tmdbFetch } from '../api/tmdbProxy';
 import { getBackdropImageSource, getPosterImageSource, getProfileImageSource } from '../lib/poster';
@@ -15,7 +16,6 @@ import {
   buildMoviePath,
   buildMovieTitle,
   SITE_NAME,
-  SITE_URL,
   truncateText,
 } from '../lib/seo';
 
@@ -533,21 +533,7 @@ const MovieDetails = () => {
         </div>
       )}
 
-      <footer className="footer mt-24 text-center text-sm text-light-200" aria-label="Film Point footer">
-        <p>© 2026 {SITE_NAME}. All rights reserved.</p>
-        <p className="mt-1">
-          Data sourced from{' '}
-          <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer" className="underline">
-            TMDB
-          </a>
-          . This product uses the TMDB API but is not endorsed or certified by TMDB.
-        </p>
-        <p className="mt-1">
-          <Link to="/" className="underline">Browse all movies</Link>
-          {' · '}
-          <a href={SITE_URL} className="underline">Film Point home</a>
-        </p>
-      </footer>
+      <SiteFooter />
     </main>
   );
 };

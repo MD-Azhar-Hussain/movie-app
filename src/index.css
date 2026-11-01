@@ -55,44 +55,158 @@
   padding: 0.75rem 1rem;
 }
 
-.footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem 1.5rem;
-  width: min(100% - 2.5rem, 80rem);
-  margin: 3rem auto 0;
+.site-footer {
+  margin-top: 4rem;
   padding: 1.5rem 0 2rem;
   border-top: 1px solid rgba(206, 206, 251, 0.14);
   color: rgba(226, 232, 240, 0.72);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   line-height: 1.5;
-  text-align: center;
 }
 
-.footer p {
+.site-footer-inner {
+  display: grid;
+  gap: 0.9rem;
+  width: min(100% - 2.5rem, 80rem);
+  margin-inline: auto;
+}
+
+.site-footer-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+}
+
+.site-footer-brand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
   margin: 0;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.01em;
 }
 
-.footer a {
+.site-footer-brand span {
+  font-size: 0.76rem;
+  font-weight: 400;
+  color: rgba(226, 232, 240, 0.6);
+}
+
+.site-footer-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+}
+
+.site-footer a {
   color: #d6c7ff;
   font-weight: 600;
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
-.footer a:hover,
-.footer a:focus-visible {
+.site-footer a:hover,
+.site-footer a:focus-visible {
   color: #ffffff;
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
+.site-footer-faq {
+  border-top: 1px solid rgba(206, 206, 251, 0.1);
+  padding-top: 0.7rem;
+}
+
+.site-footer-faq > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: #cecefb;
+}
+
+.site-footer-faq > summary::-webkit-details-marker {
+  display: none;
+}
+
+.site-footer-faq > summary::after {
+  content: '▾';
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+}
+
+.site-footer-faq[open] > summary::after {
+  transform: rotate(180deg);
+}
+
+.site-footer-faq > summary:focus-visible {
+  outline: 2px solid #ab8bff;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+.site-footer-faq dl {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0.6rem 0 0;
+  max-width: 62rem;
+}
+
+.site-footer-faq dt {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.site-footer-faq dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.76rem;
+  color: rgba(226, 232, 240, 0.68);
+}
+
+.site-footer-disclaimer {
+  margin: 0;
+  max-width: 78rem;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.site-footer-disclaimer strong {
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.site-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(206, 206, 251, 0.1);
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.5);
+}
+
 @media (max-width: 560px) {
-  .footer {
-    flex-direction: column;
-    gap: 0.4rem;
+  .site-footer-inner {
     width: min(100% - 2rem, 80rem);
+  }
+
+  .site-footer-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .site-footer-bottom {
+    flex-direction: column;
   }
 }
 
@@ -2341,7 +2455,7 @@ h1 {
     font-size: 0.7rem;
   }
 
-  .footer {
+  .site-footer {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }

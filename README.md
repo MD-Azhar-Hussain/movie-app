@@ -17,6 +17,7 @@ Search movies, explore trending searches, read full movie pages, and keep a pers
 - Local-first watchlist (localStorage) with optional background sync to Appwrite, across-tab updates and an offline mutation queue
 - Recent searches (last 8) and a weighted "Random pick"
 - Responsive dark UI, skeleton loaders, reduced-motion support, focus-trapped dialog
+- Shared footer with a compact FAQ and a clear disclaimer (TMDB attribution, no hosting, third-party links)
 - Static prerendering of the home page, genre hubs and up to 200 popular movie pages
 
 

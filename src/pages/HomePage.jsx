@@ -9,6 +9,7 @@ import MovieCardSkeleton from '../components/MovieCardSkeleton';
 import PopularLinks from '../components/PopularLinks';
 import SiteSchema from '../components/SiteSchema';
 import GenreLinks from '../components/GenreLinks';
+import SiteFooter from '../components/SiteFooter';
 import { getTrendingSearches, isWatchlistSyncConfigured, updateSearchCount } from '../appwrite';
 import {
   WATCHLIST_STORAGE_KEY,
@@ -927,21 +928,7 @@ const HomePage = () => {
 
       {watchlistToast && <div className="watchlist-toast" role="status">{watchlistToast}</div>}
 
-      <footer className="footer" aria-label="Film Point footer">
-        <p>© 2026 {SITE_NAME}. All rights reserved.</p>
-        <p>
-          Data sourced from{' '}
-          <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses
-          the TMDB API but is not endorsed or certified by TMDB.
-        </p>
-        <p>
-          <Link to="/">Discover</Link>
-          {' · '}
-          <Link to="/#watchlist">Watchlist</Link>
-          {' · '}
-          <Link to="/#trending">Trending</Link>
-        </p>
-      </footer>
+      <SiteFooter />
     </main>
   );
 };

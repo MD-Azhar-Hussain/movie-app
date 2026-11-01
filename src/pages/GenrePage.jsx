@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLoaderData, useParams } from 'react-router-dom';
 import { Head } from 'vite-react-ssg';
 import GenreLinks from '../components/GenreLinks';
+import SiteFooter from '../components/SiteFooter';
 import { getGenreBySlug } from '../lib/genres';
 import { getPosterImageSource } from '../lib/poster';
 import {
@@ -165,16 +166,9 @@ const GenrePage = () => {
         )}
 
         <GenreLinks currentSlug={genre.slug} title="Explore other genres" variant="grid" />
-
-        <footer className="footer" aria-label="Film Point footer">
-          <p>© 2026 {SITE_NAME}. All rights reserved.</p>
-          <p>
-            Data sourced from{' '}
-            <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>. This product uses
-            the TMDB API but is not endorsed or certified by TMDB.
-          </p>
-        </footer>
       </div>
+
+      <SiteFooter />
     </main>
   );
 };

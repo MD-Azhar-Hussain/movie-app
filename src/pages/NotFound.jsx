@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Head } from 'vite-react-ssg';
 import GenreLinks from '../components/GenreLinks';
 import PopularLinks from '../components/PopularLinks';
+import SiteFooter from '../components/SiteFooter';
 import { SITE_NAME } from '../lib/seo';
 
 /**
@@ -33,6 +34,8 @@ const NotFound = () => (
         <PopularLinks limit={36} title="Popular movie pages" />
       </div>
     </div>
+
+    <SiteFooter />
   </main>
 );
 
