@@ -27,6 +27,23 @@ const posterManifestPlugin = () => {
   const resolvedVirtualModuleId = `\0${virtualModuleId}`;
   const projectRoot = path.dirname(fileURLToPath(import.meta.url));
   const posterDirectory = path.resolve(projectRoot, 'public/newposters');
+  const optimizedDirectory = path.join(posterDirectory, 'optimized');
+  const imagePattern = /\.(avif|gif|jpe?g|png|webp)$/i;
+
+  // Prefer the resized WebP variants produced by `npm run posters:optimize`;
+  // fall back to the originals when they have not been generated yet.
+  const pickPosterDirectory = () => {
+    try {
+      const optimizedFiles = fs.readdirSync(optimizedDirectory).filter((fileName) => imagePattern.test(fileName));
+      if (optimizedFiles.length > 0) {
+        return { directory: optimizedDirectory, urlBase: '/newposters/optimized' };
+      }
+    } catch {
+      // Optimized directory does not exist yet.
+    }
+
+    return { directory: posterDirectory, urlBase: '/newposters' };
+  };
 
   return {
     name: 'poster-manifest',
@@ -36,14 +53,20 @@ const posterManifestPlugin = () => {
     load(id) {
       if (id !== resolvedVirtualModuleId) return undefined;
 
-      const posterFiles = fs.readdirSync(posterDirectory)
-        .filter((fileName) => /\.(avif|gif|jpe?g|png|webp)$/i.test(fileName))
-        .sort((firstFile, secondFile) => firstFile.localeCompare(secondFile));
+      const { directory, urlBase } = pickPosterDirectory();
 
-      return `export default ${JSON.stringify(posterFiles)};`;
+      const posters = fs.readdirSync(directory)
+        .filter((fileName) => imagePattern.test(fileName))
+        .sort((firstFile, secondFile) => firstFile.localeCompare(secondFile))
+        .map((fileName) => ({
+          file: fileName,
+          url: `${urlBase}/${encodeURIComponent(fileName)}`,
+        }));
+
+      return `export default ${JSON.stringify(posters)};`;
     },
     handleHotUpdate({ file, server }) {
-      if (path.dirname(file) === posterDirectory) {
+      if (path.dirname(file) === posterDirectory || path.dirname(file) === optimizedDirectory) {
         server.ws.send({ type: 'full-reload' });
         return [];
       }

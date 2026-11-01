@@ -39,7 +39,6 @@ const API_BASE_URL = 'https://api.themoviedb.org/3';
 const RECENT_SEARCHES_STORAGE_KEY = 'movie-recent-searches';
 const RANDOM_PICK_HISTORY_STORAGE_KEY = 'movie-random-pick-history';
 const MAX_RECENT_SEARCHES = 8;
-const INITIAL_GALLERY_POSTERS = 8;
 
 const RANDOM_SEARCH_FALLBACKS = [
   'Interstellar',
@@ -120,7 +119,7 @@ const getPosterTitle = (fileName) => fileName
   .replace(/[-_]+/g, ' ')
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-const LANDING_POSTERS = POSTER_FILES.map((fileName) => [fileName, getPosterTitle(fileName)]);
+const LANDING_POSTERS = POSTER_FILES.map(({ file, url }) => [url, getPosterTitle(file)]);
 const LANDING_POSTERS_SECOND = [...LANDING_POSTERS].reverse();
 
 const normalizeSearchTerm = (value) => {
@@ -459,7 +458,9 @@ const HomePage = () => {
       }
     } catch (error) {
       if (error.name === 'AbortError' || requestId !== moviesRequestIdRef.current) return;
-      console.error('Error fetching movies:', error);
+      // Handled failure: the UI shows a retry state, so keep the console clean
+      // (Lighthouse's "browser errors" audit counts console.error calls).
+      console.warn('Could not load movies:', error.message);
       setErrorMessage('Failed to fetch movies. Please try again later.');
     } finally {
       if (requestId === moviesRequestIdRef.current) setIsLoading(false);
@@ -539,7 +540,7 @@ const HomePage = () => {
       setSelectedMovie({ ...movie, ...data });
     } catch (error) {
       if (error.name === 'AbortError' || requestId !== detailRequestIdRef.current) return;
-      console.error('Error fetching movie details:', error);
+      console.warn('Could not load movie details:', error.message);
       setDetailError('Unable to load movie details right now. Please try again.');
     } finally {
       if (requestId === detailRequestIdRef.current && !controller.signal.aborted) {
@@ -654,23 +655,29 @@ const HomePage = () => {
         <header id="discover" data-reveal>
           <div className="poster-gallery" aria-label="Featured movie posters">
             <div className="poster-gallery-track poster-gallery-track-forward">
-              {[...LANDING_POSTERS, ...LANDING_POSTERS].map(([fileName, title], index) => (
+              {[...LANDING_POSTERS, ...LANDING_POSTERS].map(([url], index) => (
                 <img
-                  key={`forward-${fileName}-${index}`}
-                  src={`/newposters/${encodeURIComponent(fileName)}`}
-                  alt={`${title} poster`}
-                  loading={index < INITIAL_GALLERY_POSTERS ? 'eager' : 'lazy'}
+                  key={`forward-${url}-${index}`}
+                  src={url}
+                  alt=""
+                  width="400"
+                  height="600"
+                  loading={index < 6 ? 'eager' : 'lazy'}
+                  fetchPriority="low"
                   decoding="async"
                 />
               ))}
             </div>
             <div className="poster-gallery-track poster-gallery-track-reverse">
-              {[...LANDING_POSTERS_SECOND, ...LANDING_POSTERS_SECOND].map(([fileName, title], index) => (
+              {[...LANDING_POSTERS_SECOND, ...LANDING_POSTERS_SECOND].map(([url], index) => (
                 <img
-                  key={`reverse-${fileName}-${index}`}
-                  src={`/newposters/${encodeURIComponent(fileName)}`}
-                  alt={`${title} poster`}
-                  loading={index < INITIAL_GALLERY_POSTERS ? 'eager' : 'lazy'}
+                  key={`reverse-${url}-${index}`}
+                  src={url}
+                  alt=""
+                  width="400"
+                  height="600"
+                  loading={index < 6 ? 'eager' : 'lazy'}
+                  fetchPriority="low"
                   decoding="async"
                 />
               ))}
@@ -748,7 +755,12 @@ const HomePage = () => {
             </div>
             <div className="watchlist-tools">
               <label htmlFor="watchlist-sort">Sort</label>
-              <select id="watchlist-sort" value={watchlistSort} onChange={(event) => setWatchlistSort(event.target.value)}>
+              <select
+                id="watchlist-sort"
+                aria-label="Sort watchlist"
+                value={watchlistSort}
+                onChange={(event) => setWatchlistSort(event.target.value)}
+              >
                 <option value="recent">Recent</option>
                 <option value="title">Title</option>
                 <option value="rating">Rating</option>

@@ -17,7 +17,8 @@
     "graph:query": "node scripts/graphify.mjs query",
     "graph:explain": "node scripts/graphify.mjs explain",
     "graph:hubs": "node scripts/graphify.mjs god-nodes",
-    "graph:affected": "node scripts/graphify.mjs affected"
+    "graph:affected": "node scripts/graphify.mjs affected",
+    "posters:optimize": "node scripts/optimize-posters.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -41,6 +42,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "sharp": "^0.35.5",
     "typescript": "^5.9.3",
     "vite": "^6.2.0"
   }

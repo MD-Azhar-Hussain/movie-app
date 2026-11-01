@@ -54,6 +54,7 @@ npm run dev      # http://localhost:5173
 npm run build    # prerender + sitemap
 npm run preview
 npm run lint
+npm run posters:optimize   # regenerate the resized gallery posters (~4 MB -> ~470 KB)
 ```
 
 > `npm run dev` also serves `/api/tmdb` through a Vite middleware that mirrors the Vercel function, so the TMDB key never reaches the browser during development either.
