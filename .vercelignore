@@ -1,8 +1,5 @@
 # Files that are not needed to build/deploy the site on Vercel.
-# (node_modules, dist, .tools and graphify-out are already git-ignored.)
+# (node_modules, dist and public/sitemap.xml are already git-ignored.)
 docs/
-.agents/
-.copilot/
-.clinerules/
 PROJECT_INTERVIEW_GUIDE.md
 .vercelignore

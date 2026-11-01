@@ -166,21 +166,6 @@ Browser ──► /api/tmdb?path=/3/…  ──►  TMDB (server-side key)
 Build  ──► TMDB (VITE_API_KEY) ──► dist/index.html + dist/movie/<id>/index.html
 ```
 
-## 🧠 Code intelligence (Graphify)
-
-The repo ships a [Graphify](https://github.com/Graphify-Labs/graphify) knowledge-graph setup so AI coding agents (Cline, Copilot, Cursor, Claude Code, Codex, Gemini CLI) can query the architecture instead of grepping it. Tooling only — nothing is bundled or deployed.
-
-**Everything stays inside this folder**: the Python tool is installed into `.tools/venv` (git-ignored), never globally.
-
-```bash
-npm run graph:setup                                  # one-time: create .tools/venv + install graphifyy
-npm run graph:build                                  # build/refresh graphify-out/graph.json (no API key)
-npm run graph:query -- "how does the watchlist sync queue work"
-npm run graph:explain -- buildMovieTitle
-```
-
-Skills are committed in `.agents/skills/graphify/` and `.copilot/skills/graphify/` (plus `.clinerules/graphify.md` for Cline); the generated graph and the venv stay git-ignored. Full setup, commands and caveats: [`docs/graphify.md`](docs/graphify.md).
-
 Compliance map for every recommendation in [Google's SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide): [`docs/seo.md`](docs/seo.md).
 
 

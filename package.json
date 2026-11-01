@@ -11,13 +11,6 @@
     "build": "vite-react-ssg build && node scripts/generate-sitemap.js && node scripts/postprocess-html.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "graph:setup": "node scripts/graphify-setup.mjs",
-    "graph:build": "node scripts/graphify.mjs update . --no-cluster",
-    "graph:update": "node scripts/graphify.mjs update .",
-    "graph:query": "node scripts/graphify.mjs query",
-    "graph:explain": "node scripts/graphify.mjs explain",
-    "graph:hubs": "node scripts/graphify.mjs god-nodes",
-    "graph:affected": "node scripts/graphify.mjs affected",
     "posters:optimize": "node scripts/optimize-posters.mjs"
   },
   "dependencies": {

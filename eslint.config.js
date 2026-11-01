@@ -27,7 +27,7 @@ export default defineConfig([
     },
   },
   {
-    // Node ESM helper scripts (build tooling, Graphify launcher).
+    // Node ESM helper scripts (build tooling).
     files: ['**/*.mjs'],
     extends: [js.configs.recommended],
     languageOptions: {

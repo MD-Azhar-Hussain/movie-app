@@ -20,12 +20,6 @@ public/sitemap.xml
 # Vercel local metadata
 .vercel
 
-# Graphify knowledge graph (generated locally, see docs/graphify.md)
-graphify-out/
-/raw/
-# Project-local Python tool venv (Graphify lives here, never globally)
-.tools/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
