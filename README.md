@@ -165,6 +165,28 @@ Skills are committed in `.agents/skills/graphify/` and `.copilot/skills/graphify
 
 `vercel.json` already configures rewrites, cache headers and `cleanUrls`, so prerendered pages and client-side routes coexist.
 
+### Pre-flight checklist (production)
+
+| Check | Why it matters |
+| --- | --- |
+| `TMDB_API_KEY` set in Vercel (Production **and** Preview) | The browser only calls `/api/tmdb`; without it every movie/search request returns 500. There is no client-side key fallback by design. |
+| `VITE_API_KEY` set in Vercel | Used at **build** time to prerender the movie pages and generate the 206-URL sitemap. Missing = the site still builds, but with no prerendered movie pages. |
+| `VITE_SITE_URL` set | Canonical tags, OG URLs and the sitemap use it. Must match the deployed origin. |
+| Node ≥ 20 | Pinned via `engines` in `package.json`; Vite 6 requires it. |
+| Deployment Protection **off** for Production | Crawlers get a login wall otherwise and nothing gets indexed. |
+| Build command = `npm run build` | Runs `vite-react-ssg build` (prerender) **then** `scripts/generate-sitemap.js`. |
+| Output directory = `dist` | Vercel's Vite default; matches the SSG output. |
+
+Promote a preview to production by merging into `main`:
+
+```bash
+git checkout main
+git merge --ff-only prduck-improvement-session
+git push origin main
+```
+
+Unknown URLs return a real `404` (via `public/404.html` + `noindex`) instead of a homepage duplicate — check that before a big SEO push.
+
 ## 👨‍💻 Author
 
 **MD Azhar Hussain** — CSE (IoT) · Frontend Developer · Cloud & API Integrations
