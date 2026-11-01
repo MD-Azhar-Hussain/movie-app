@@ -292,7 +292,11 @@ export default defineConfig(({ command }) => {
     target: 'es2020',
   },
   ssgOptions: {
-    script: 'async',
+    // 'async' let the module script execute before the inline
+    // `window.__VITE_REACT_SSG_HASH__` assignment at the end of <body>, which
+    // made hydration fetch `static-loader-data-manifest-undefined.json`.
+    // 'defer' keeps execution order (after the document is parsed).
+    script: 'defer',
     formatting: 'none',
     dirStyle: 'nested',
     mock: true,

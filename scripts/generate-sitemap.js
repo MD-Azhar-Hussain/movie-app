@@ -149,10 +149,14 @@ ${allUrls
     console.log(`[Sitemap] Written to ${path.resolve(distDir, 'sitemap.xml')}`);
   }
 
-  // Keep robots.txt's Sitemap directive pointing at the deployed origin.
-  const robotsPath = path.resolve(publicDir, 'robots.txt');
-  const robotsContent = `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /build-info.json\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
-  fs.writeFileSync(robotsPath, robotsContent, 'utf-8');
+  // Keep robots.txt's Sitemap directive pointing at the deployed origin, in
+  // both the source folder and the build output (public/ is copied into dist/
+  // before this script runs, so dist needs its own write).
+  const robotsContent = `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
+  fs.writeFileSync(path.resolve(publicDir, 'robots.txt'), robotsContent, 'utf-8');
+  if (fs.existsSync(distDir)) {
+    fs.writeFileSync(path.resolve(distDir, 'robots.txt'), robotsContent, 'utf-8');
+  }
 
   console.log(`[Sitemap] Successfully indexed ${allUrls.length} total URLs.`);
 }

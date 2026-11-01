@@ -1,11 +1,16 @@
 /**
  * Post-build HTML fixes for the prerendered pages.
  *
- * `vite-react-ssg` injects the Helmet output at the very start of `<head>`,
- * which pushes `<meta charset>` past the first 1024 bytes. Chrome then has to
- * re-parse the document (Lighthouse's `charset` audit fails) and the late
- * charset can cause a re-layout. Moving a single charset declaration to the
- * first position inside `<head>` fixes both.
+ * 1. `<meta charset>` — `vite-react-ssg` injects the Helmet output at the very
+ *    start of `<head>`, pushing the charset past the first 1024 bytes. Chrome
+ *    then re-parses the document (Lighthouse `charset` audit fails) and can
+ *    re-layout.
+ *
+ * 2. `async` on the entry module script — the module was executing before the
+ *    inline `window.__VITE_REACT_SSG_HASH__` assignment at the end of <body>,
+ *    so hydration requested `static-loader-data-manifest-undefined.json` (404).
+ *    Module scripts are deferred by default; removing `async` restores the
+ *    documented order.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -96,6 +101,10 @@ for (const filePath of walk(distDir)) {
 
   // Collapse the whitespace the removal may have left behind.
   html = html.replace(/(<head[^>]*>\s*)\s+/i, '$1');
+
+  // Remove `async` from the entry module script so it stays deferred.
+  html = html.replace(/(<script\b[^>]*\btype="module"[^>]*?)\s+async(?:="[^"]*")?/gi, '$1');
+  html = html.replace(/(<script\b[^>]*?)\s+async(?:="[^"]*")?([^>]*\btype="module")/gi, '$1$2');
 
   if (html !== original) {
     fs.writeFileSync(filePath, html, 'utf8');
