@@ -19,39 +19,50 @@ const projectRootDir = path.dirname(fileURLToPath(import.meta.url));
  * A production build without a TMDB key silently ships a broken site: the genre
  * hubs prerender empty, the "Popular movie pages" dropdown renders nothing, no
  * movie page is generated and the sitemap is skipped. Fail loudly instead.
+ *
+ * The details go to stderr *before* throwing, because vite-react-ssg wraps the
+ * throw in a generic "An internal error occurred" banner and a multi-line error
+ * message is easy to lose in CI logs.
  */
 const assertTmdbKeyForBuild = (command) => {
   if (command !== 'build') return;
+
   if (process.env.SKIP_TMDB_BUILD_CHECK === '1') {
     console.warn('[build] SKIP_TMDB_BUILD_CHECK=1 — building without a TMDB key (degraded output).');
     return;
   }
+
   if (getTmdbApiKey()) return;
 
-  throw new Error(
+  console.error(
     [
       '',
-      '──────────────────────────────────────────────────────────────────────',
-      ' VITE_API_KEY is missing — this build would ship a broken site.',
-      '',
+      '==============================================================',
+      ' BUILD STOPPED: VITE_API_KEY is missing',
+      ' This build would ship empty genre pages and no movie pages.',
+      '==============================================================',
       ' The TMDB bearer token is needed at BUILD time to prerender:',
-      '   • the ~200 movie pages',
-      '   • the 19 genre hub pages (their ranked movie lists)',
-      '   • the "Popular movie pages" dropdown',
-      '   • sitemap.xml',
+      '   - the ~200 movie pages',
+      '   - the 19 genre hub pages (their ranked movie lists)',
+      '   - the "Popular movie pages" dropdown',
+      '   - sitemap.xml',
       '',
-      ' Fix: Vercel → Project → Settings → Environment Variables →',
+      ' Fix: Vercel -> Project -> Settings -> Environment Variables ->',
       '      add VITE_API_KEY (TMDB v4 read token) for Production AND Preview,',
       '      then redeploy (env changes only apply to new builds).',
       '',
-      ' The runtime proxy additionally needs TMDB_API_KEY (or falls back to',
-      ' VITE_API_KEY). Verify the deployment with /api/health.',
+      ' The runtime proxy also needs TMDB_API_KEY (VITE_API_KEY is accepted as',
+      ' a fallback). Verify a deployment with /api/health and /build-info.json.',
       '',
-      ' To build anyway (degraded, never for production):',
-      '   SKIP_TMDB_BUILD_CHECK=1 npm run build',
-      '──────────────────────────────────────────────────────────────────────',
+      ' Degraded build on purpose? Set SKIP_TMDB_BUILD_CHECK=1 in the',
+      ' build environment.',
+      '==============================================================',
       '',
     ].join('\n')
+  );
+
+  throw new Error(
+    'VITE_API_KEY is missing. Set it in the build environment (Vercel -> Settings -> Environment Variables -> Production + Preview) and redeploy, or set SKIP_TMDB_BUILD_CHECK=1 to build without prerendered movie data.'
   );
 };
 

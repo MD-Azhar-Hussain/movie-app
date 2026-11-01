@@ -220,6 +220,23 @@ That message is the loader's failure state, and the browser console now says whi
 { "ok": true, "tmdbKey": { "TMDB_API_KEY": true, "VITE_API_KEY": false } }
 ```
 
+### Vercel build fails: `[vite-react-ssg] An internal error occurred` / `Command "npm run build" exited with 1`
+
+That wrapper is vite-react-ssg reporting the exception thrown by this repo's build guard. Scroll up in the log for the banner:
+
+```
+==============================================================
+ BUILD STOPPED: VITE_API_KEY is missing
+ This build would ship empty genre pages and no movie pages.
+==============================================================
+```
+
+**Cause:** the build has no TMDB token, so nothing can be prerendered (movie pages, genre lists, popular-movies dropdown, sitemap).
+
+**Fix:** Vercel → Project → Settings → Environment Variables → add `VITE_API_KEY` (TMDB v4 read token) for **Production and Preview**, then **redeploy** — env changes never apply to an existing build.
+
+Only if you deliberately want a build without prerendered movie data, add `SKIP_TMDB_BUILD_CHECK=1` to the build environment (the site then has empty genre pages and no movie pages — not for production).
+
 ### Other common cases
 
 - **Trending section never appears + a 403 in the console** — the Appwrite search collection is not readable anonymously. Either allow read access for guests (Users role) on the collection, or disable the request with `VITE_APPWRITE_TRENDING=off`. The console error is cached per session so it does not repeat on navigation.
