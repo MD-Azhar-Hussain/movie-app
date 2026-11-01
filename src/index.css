@@ -2402,6 +2402,59 @@ h1 {
 }
 
 
+/* Data-unavailable state (loader returned nothing) */
+.data-error {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.1rem 1.25rem;
+  border-radius: 1rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  color: #fee2e2;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.data-error p {
+  margin: 0;
+}
+
+.data-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.data-error-actions-center {
+  justify-content: center;
+}
+
+.data-error-actions button {
+  min-height: 2.5rem;
+  padding: 0 1.25rem;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.16);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.data-error-actions button:hover,
+.data-error-actions button:focus-visible {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.data-error-actions a {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #cecefb;
+  text-decoration: underline;
+}
+
 /* ------------------------------------------------------------------ *
  * Cross-device polish (phones, tablets, touch, large screens)
  * ------------------------------------------------------------------ */

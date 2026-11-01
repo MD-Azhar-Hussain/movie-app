@@ -84,7 +84,7 @@ VITE_APPWRITE_WATCHLIST_COLLECTION_ID=YOUR_WATCHLIST_COLLECTION_ID
 TMDB_API_KEY=YOUR_TMDB_BEARER_TOKEN
 ```
 
-Without `TMDB_API_KEY` the proxy returns 500 and the site shows the "Failed to fetch movies" state — there is intentionally no client-side key fallback anymore.
+The proxy also accepts `VITE_API_KEY` as a fallback, so a project that already has that variable configured works without a second copy of the token. If neither is present the proxy returns `500` and the site shows the "could not load" state — there is intentionally no client-side key fallback.
 
 ### How to get the keys
 
@@ -173,7 +173,7 @@ Compliance map for every recommendation in [Google's SEO Starter Guide](https://
 
 | Check | Why it matters |
 | --- | --- |
-| `TMDB_API_KEY` set in Vercel (Production **and** Preview) | The browser only calls `/api/tmdb`; without it every movie/search request returns 500. There is no client-side key fallback by design. |
+| `TMDB_API_KEY` set in Vercel (Production **and** Preview) | The browser only calls `/api/tmdb`; without it every movie/search request returns 500. `VITE_API_KEY` is accepted as a fallback. Verify with `/api/health`. |
 | `VITE_API_KEY` set in Vercel | Used at **build** time to prerender the movie pages and generate the 206-URL sitemap. Missing = the site still builds, but with no prerendered movie pages. |
 | `VITE_SITE_URL` set | Canonical tags, OG URLs and the sitemap use it. Must match the deployed origin. |
 | Node ≥ 20 | Pinned via `engines` in `package.json`; Vite 6 requires it. |
@@ -190,6 +190,31 @@ git push origin main
 ```
 
 Unknown URLs return a real `404` (via `public/404.html` + `noindex`) instead of a homepage duplicate — check that before a big SEO push.
+
+## 🩺 Troubleshooting
+
+### "We could not load … right now" on every genre and movie page
+
+That message is the loader's failure state, and the browser console now says which of these it is:
+
+| Console message | Cause | Fix |
+| --- | --- | --- |
+| `/api/tmdb returned "text/html" instead of JSON` | The API route does not exist where you are looking (plain `vite preview` before this fix, a static host, `file://`, or `vercel dev` without functions) | Use `npm run dev`, or deploy to Vercel. `npm run preview` now ships the proxy + clean URLs |
+| `/api/tmdb responded 500` | No key in that environment | Set `TMDB_API_KEY` **or** `VITE_API_KEY` in the deployment env, then redeploy. Check `/api/health` |
+| `/api/tmdb responded 502` | Upstream network failure reaching TMDB | Retry; transient |
+| Prerendered HTML is also empty (`dist/genre/*/index.html` has no links) | The build ran without `VITE_API_KEY` | Add it to the build environment and rebuild |
+
+`GET /api/health` reports whether the proxy has a key (booleans only, never the token):
+
+```json
+{ "ok": true, "tmdbKey": { "TMDB_API_KEY": true, "VITE_API_KEY": false } }
+```
+
+### Other common cases
+
+- **Accessing `/genre/…` or `/movie/…` directly returns the home page** — that is a host without rewrites. `vercel.json` covers production; `npm run preview` covers local (see `cleanUrlPreviewMiddleware` in `vite.config.js`).
+- **Build prerenders only `/`** — no `VITE_API_KEY` at build time; the sitemap will say `Using 0 movie URLs`.
+- **Watchlist does not sync between devices** — expected: it is local-first, and sync only runs when `VITE_APPWRITE_WATCHLIST_COLLECTION_ID` is configured.
 
 ## 👨‍💻 Author
 

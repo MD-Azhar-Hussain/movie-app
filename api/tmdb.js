@@ -18,11 +18,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.TMDB_API_KEY;
+  // Accept either variable so a project that already has VITE_API_KEY configured
+  // in Vercel works without adding a second copy of the same token. Both are
+  // read on the server only — the key never reaches the browser.
+  const apiKey = process.env.TMDB_API_KEY || process.env.VITE_API_KEY;
   if (!apiKey) {
-    console.error('[tmdb-proxy] TMDB_API_KEY environment variable is not set.');
-    return res.status(500).json({ error: 'Server misconfiguration: missing API key' });
+    console.error('[tmdb-proxy] No TMDB key configured (TMDB_API_KEY or VITE_API_KEY).');
+    return res.status(500).json({
+      error: 'Server misconfiguration: missing API key',
+      hint: 'Add TMDB_API_KEY (or VITE_API_KEY) to the deployment environment variables, then redeploy.',
+    });
   }
+
+  res.setHeader('Cache-Control', 'no-store');
 
   // Extract the TMDB path from the `path` query param
   const { path: tmdbPath, ...queryParams } = req.query;

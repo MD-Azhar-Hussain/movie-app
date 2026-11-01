@@ -13,6 +13,7 @@ import {
 } from './src/api/tmdb-ssg.js';
 import { GENRE_PATHS } from './src/lib/genres.js';
 
+const projectRootDir = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Number of movie pages that get prerendered, listed in the sitemap and linked
@@ -80,31 +81,35 @@ const popularMoviesPlugin = () => {
 };
 
 /**
- * Local development replacement for the Vercel serverless TMDB proxy so the
- * TMDB bearer token never has to be exposed through `import.meta.env`.
+ * Local implementation of the Vercel serverless TMDB proxy, so the TMDB bearer
+ * token never has to be exposed through `import.meta.env`.
+ *
+ * Used by both `vite dev` and `vite preview`. Without it, preview (or any plain
+ * static host) answers `/api/tmdb` with index.html, every loader rejects the
+ * non-JSON response and every genre/movie page shows "could not load".
  */
-const tmdbDevProxyPlugin = () => ({
-  name: 'tmdb-dev-proxy',
-  apply: 'serve',
-  configureServer(server) {
-    server.middlewares.use(async (req, res, next) => {
-      const requestUrl = req.url || '';
-      if (!requestUrl.startsWith('/api/tmdb')) {
-        next();
-        return;
-      }
+const createTmdbProxyMiddleware = () => async (req, res, next) => {
+  const requestUrl = req.url || '';
+  if (!requestUrl.startsWith('/api/tmdb')) {
+    next();
+    return;
+  }
 
-      const respondWithJson = (statusCode, payload) => {
-        res.statusCode = statusCode;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify(payload));
-      };
+  const respondWithJson = (statusCode, payload) => {
+    res.statusCode = statusCode;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store');
+    res.end(JSON.stringify(payload));
+  };
 
-      const apiKey = getTmdbApiKey();
-      if (!apiKey) {
-        respondWithJson(500, { error: 'Missing VITE_API_KEY in the local .env file' });
-        return;
-      }
+  const apiKey = getTmdbApiKey();
+  if (!apiKey) {
+    respondWithJson(500, {
+      error: 'Missing VITE_API_KEY in the local .env file',
+      hint: 'Add VITE_API_KEY to .env (a TMDB v4 bearer token) and restart the server.',
+    });
+    return;
+  }
 
       const parsedUrl = new URL(requestUrl, 'http://localhost');
       const tmdbPath = parsedUrl.searchParams.get('path');
@@ -144,10 +149,43 @@ const tmdbDevProxyPlugin = () => ({
         res.setHeader('Cache-Control', 'no-store');
         res.end(await upstreamResponse.text());
       } catch (error) {
-        console.error('[vite] TMDB dev proxy failed:', error.message, error.cause?.message || '');
+        console.error('[vite] TMDB proxy failed:', error.message, error.cause?.message || '');
         respondWithJson(502, { error: 'Failed to reach TMDB. Please try again.' });
       }
-    });
+};
+
+/**
+ * `vite preview` serves `dist/` statically and has no rewrite rules, so map
+ * clean URLs onto the prerendered directory index:
+ *   /genre/mystery -> dist/genre/mystery/index.html
+ */
+const cleanUrlPreviewMiddleware = (req, _res, next) => {
+  const requestPath = (req.url || '/').split('?')[0];
+  const hasExtension = /\.[a-z0-9]+$/i.test(requestPath);
+
+  if (requestPath === '/' || requestPath.startsWith('/api/') || hasExtension) {
+    next();
+    return;
+  }
+
+  const segments = decodeURIComponent(requestPath).split('/').filter((segment) => segment && segment !== '..');
+  const indexPath = path.join(projectRootDir, 'dist', ...segments, 'index.html');
+
+  if (fs.existsSync(indexPath)) {
+    req.url = `/${segments.join('/')}/index.html`;
+  }
+
+  next();
+};
+
+const tmdbProxyPlugin = () => ({
+  name: 'tmdb-proxy',
+  configureServer(server) {
+    server.middlewares.use(createTmdbProxyMiddleware());
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use(cleanUrlPreviewMiddleware);
+    server.middlewares.use(createTmdbProxyMiddleware());
   },
 });
 
@@ -156,7 +194,7 @@ export default defineConfig({
   plugins: [
     posterManifestPlugin(),
     popularMoviesPlugin(),
-    tmdbDevProxyPlugin(),
+    tmdbProxyPlugin(),
     react(),
     tailwindcss(),
     flowbiteReact(),

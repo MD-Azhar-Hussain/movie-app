@@ -141,12 +141,17 @@ const MovieDetails = () => {
         <div className="max-w-md text-center">
           <h1 className="text-3xl font-bold mb-4">Movie Not Available</h1>
           <p className="text-light-200 mb-6">{error || 'Unable to retrieve details for this movie.'}</p>
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold text-white shadow-lg shadow-indigo-500/30 hover:scale-105 transition"
-          >
-            ← Return to Movies
-          </Link>
+          <div className="data-error-actions data-error-actions-center">
+            <button type="button" onClick={() => window.location.reload()}>
+              Try again
+            </button>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 font-semibold text-white shadow-lg shadow-indigo-500/30 hover:scale-105 transition"
+            >
+              ← Return to Movies
+            </Link>
+          </div>
         </div>
       </main>
     );

@@ -6,6 +6,43 @@ import GenrePage from './pages/GenrePage';
 import NotFound from './pages/NotFound';
 import { getGenreBySlug } from './lib/genres';
 
+/**
+ * Shared failure reporting for the browser loaders.
+ *
+ * A `null` loader result is what renders "could not load" in the UI, so log the
+ * real reason to the console: a 5xx means the serverless proxy has no key, and
+ * non-JSON means the route does not exist at all (e.g. `vite preview`, or a
+ * static host without the function).
+ */
+const parseTmdbProxyResponse = async (response, label) => {
+  if (!response.ok) {
+    console.warn(
+      `[${label}] /api/tmdb responded ${response.status}.` +
+        (response.status >= 500
+          ? ' The TMDB proxy is not configured — set TMDB_API_KEY (or VITE_API_KEY) in the environment.'
+          : '')
+    );
+    return null;
+  }
+
+  const contentType = response.headers?.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    console.warn(
+      `[${label}] /api/tmdb returned "${contentType || 'no content-type'}" instead of JSON.` +
+        ' The API route is not available in this environment (use `npm run dev`, or deploy to Vercel).' +
+        ' See README → Troubleshooting.'
+    );
+    return null;
+  }
+
+  try {
+    return await response.json();
+  } catch (error) {
+    console.warn(`[${label}] Could not parse the TMDB response:`, error);
+    return null;
+  }
+};
+
 export const movieLoader = async ({ params }) => {
   const { id } = params;
   if (!id) return null;
@@ -26,13 +63,9 @@ export const movieLoader = async ({ params }) => {
       `https://api.themoviedb.org/3/movie/${id}?append_to_response=credits,videos,recommendations`
     );
 
-    if (!response.ok) return null;
-
-    const contentType = response.headers?.get('content-type') || '';
-    if (!contentType.includes('application/json')) return null;
-
-    return await response.json();
-  } catch {
+    return await parseTmdbProxyResponse(response, 'movie');
+  } catch (error) {
+    console.warn('[movie] Request to /api/tmdb failed:', error.message);
     return null;
   }
 };
@@ -52,13 +85,9 @@ export const genreLoader = async ({ params }) => {
 
   try {
     const response = await tmdbFetch(`https://api.themoviedb.org/3/${query}`);
-    if (!response.ok) return null;
-
-    const contentType = response.headers?.get('content-type') || '';
-    if (!contentType.includes('application/json')) return null;
-
-    return await response.json();
-  } catch {
+    return await parseTmdbProxyResponse(response, 'genre');
+  } catch (error) {
+    console.warn('[genre] Request to /api/tmdb failed:', error.message);
     return null;
   }
 };

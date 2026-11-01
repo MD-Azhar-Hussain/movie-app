@@ -130,9 +130,18 @@ const GenrePage = () => {
         </header>
 
         {movies.length === 0 ? (
-          <p className="watchlist-empty">
-            We could not load {genre.name.toLowerCase()} movies right now. Please try again in a moment.
-          </p>
+          <div className="data-error">
+            <p>
+              We could not load {genre.name.toLowerCase()} movies right now. The movie data service may be
+              temporarily unavailable.
+            </p>
+            <div className="data-error-actions">
+              <button type="button" onClick={() => window.location.reload()}>
+                Try again
+              </button>
+              <Link to="/">Back to discovery</Link>
+            </div>
+          </div>
         ) : (
           <section aria-labelledby="genre-movies-title">
             <h2 id="genre-movies-title" className="genre-section-title">
