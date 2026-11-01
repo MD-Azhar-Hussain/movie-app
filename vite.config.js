@@ -16,6 +16,46 @@ import { GENRE_PATHS } from './src/lib/genres.js';
 const projectRootDir = path.dirname(fileURLToPath(import.meta.url));
 
 /**
+ * A production build without a TMDB key silently ships a broken site: the genre
+ * hubs prerender empty, the "Popular movie pages" dropdown renders nothing, no
+ * movie page is generated and the sitemap is skipped. Fail loudly instead.
+ */
+const assertTmdbKeyForBuild = (command) => {
+  if (command !== 'build') return;
+  if (process.env.SKIP_TMDB_BUILD_CHECK === '1') {
+    console.warn('[build] SKIP_TMDB_BUILD_CHECK=1 — building without a TMDB key (degraded output).');
+    return;
+  }
+  if (getTmdbApiKey()) return;
+
+  throw new Error(
+    [
+      '',
+      '──────────────────────────────────────────────────────────────────────',
+      ' VITE_API_KEY is missing — this build would ship a broken site.',
+      '',
+      ' The TMDB bearer token is needed at BUILD time to prerender:',
+      '   • the ~200 movie pages',
+      '   • the 19 genre hub pages (their ranked movie lists)',
+      '   • the "Popular movie pages" dropdown',
+      '   • sitemap.xml',
+      '',
+      ' Fix: Vercel → Project → Settings → Environment Variables →',
+      '      add VITE_API_KEY (TMDB v4 read token) for Production AND Preview,',
+      '      then redeploy (env changes only apply to new builds).',
+      '',
+      ' The runtime proxy additionally needs TMDB_API_KEY (or falls back to',
+      ' VITE_API_KEY). Verify the deployment with /api/health.',
+      '',
+      ' To build anyway (degraded, never for production):',
+      '   SKIP_TMDB_BUILD_CHECK=1 npm run build',
+      '──────────────────────────────────────────────────────────────────────',
+      '',
+    ].join('\n')
+  );
+};
+
+/**
  * Number of movie pages that get prerendered, listed in the sitemap and linked
  * from the static "Popular movie pages" navigation. More prerendered pages =
  * faster discovery by search engines.
@@ -213,7 +253,10 @@ const tmdbProxyPlugin = () => ({
 });
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => {
+  assertTmdbKeyForBuild(command);
+
+  return {
   define: {
     // Vercel provides the analytics/speed-insights scripts only on its own
     // platform. Flag the build so local previews do not request them (and log
@@ -253,4 +296,5 @@ export default defineConfig({
       }
     },
   },
+  };
 });

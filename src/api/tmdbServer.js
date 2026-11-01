@@ -30,7 +30,7 @@ export const fetchTmdbServer = async (path, { attempts = 3, retryDelayMs = 400 }
     try {
       const response = await fetch(url, { headers: buildHeaders(apiKey) });
 
-      if (response.status === 429) {
+      if (response.status === 429 || response.status >= 500) {
         await sleep(retryDelayMs * (attempt + 1));
         continue;
       }

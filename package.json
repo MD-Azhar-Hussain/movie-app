@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite-react-ssg build && node scripts/postprocess-html.mjs && node scripts/generate-sitemap.js",
+    "build": "vite-react-ssg build && node scripts/generate-sitemap.js && node scripts/postprocess-html.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "graph:setup": "node scripts/graphify-setup.mjs",

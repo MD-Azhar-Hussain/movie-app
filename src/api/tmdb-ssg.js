@@ -69,7 +69,7 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
   for (let page = 1; page <= pagesToFetch; page += 1) {
     let succeeded = false;
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         let response;
         try {
@@ -78,7 +78,7 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
             { headers: TMDB_HEADERS(apiKey), signal: AbortSignal.timeout(15000) }
           );
         } catch (fetchError) {
-          if (attempt === 2) {
+          if (attempt === 3) {
             console.warn(`[SSG] Error fetching popular movies page ${page}:`, fetchError.message);
           } else {
             await sleep(500 * (attempt + 1));
@@ -107,7 +107,7 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
         succeeded = true;
         break;
       } catch (error) {
-        if (attempt === 2) {
+        if (attempt === 3) {
           console.warn(`[SSG] Error fetching popular movies page ${page}:`, error.message);
         } else {
           await sleep(400 * (attempt + 1));
@@ -115,7 +115,11 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
       }
     }
 
-    if (!succeeded) break;
+    if (!succeeded) {
+      // One flaky page must not discard the pages we already collected.
+      console.warn(`[SSG] Skipping TMDB popular page ${page} after repeated failures.`);
+      continue;
+    }
     if (movies.size >= count) break;
   }
 

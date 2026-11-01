@@ -78,8 +78,12 @@ async function generateSitemap() {
   console.log(`[Sitemap] Using ${movieIds.length} movie URLs from ${source}.`);
 
   if (movieIds.length === 0) {
-    console.warn('[Sitemap] No movie URLs could be resolved. Keeping the existing sitemap untouched.');
-    return;
+    // Still publish a valid sitemap (home + genre hubs) instead of returning a
+    // 404: the crawler gets the pages that do exist, and the warning is visible
+    // in the build log.
+    console.warn(
+      '[Sitemap] No movie URLs resolved. Writing the home + genre URLs only — check VITE_API_KEY in the build environment.'
+    );
   }
 
   const staticUrls = [
@@ -147,7 +151,7 @@ ${allUrls
 
   // Keep robots.txt's Sitemap directive pointing at the deployed origin.
   const robotsPath = path.resolve(publicDir, 'robots.txt');
-  const robotsContent = `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
+  const robotsContent = `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /build-info.json\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
   fs.writeFileSync(robotsPath, robotsContent, 'utf-8');
 
   console.log(`[Sitemap] Successfully indexed ${allUrls.length} total URLs.`);

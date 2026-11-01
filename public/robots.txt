@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /build-info.json
 
 Sitemap: https://filmpoint.vercel.app/sitemap.xml
