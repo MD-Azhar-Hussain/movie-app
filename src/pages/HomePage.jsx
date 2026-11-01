@@ -181,7 +181,19 @@ const persistRandomPickHistory = (history) => {
 };
 
 const HomePage = () => {
-  const [searchTerm, setSearchTerm] = useState('');
+  // Incoming `?q=` search — the same URL shape advertised by the WebSite
+  // SearchAction, so shared links and sitelinks search actually work.
+  const initialQuery = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const query = window.location?.search
+      ? new URLSearchParams(window.location.search).get('q')
+      : '';
+    return normalizeSearchTerm(query || '');
+  }, []);
+
+  const isSearchResultPage = Boolean(initialQuery);
+
+  const [searchTerm, setSearchTerm] = useState(initialQuery);
   const [errorMessage, setErrorMessage] = useState('');
   const [moviesList, setMoviesList] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -601,9 +613,14 @@ const HomePage = () => {
   const pageDescription = activeSearchTerm
     ? truncateText(`Search results, ratings and streaming details for "${activeSearchTerm}" on ${SITE_NAME}.`)
     : SITE_DESCRIPTION;
-  const canonicalUrl = activeSearchTerm
-    ? absoluteUrl(`/?q=${encodeURIComponent(activeSearchTerm)}`)
-    : absoluteUrl('/');
+
+  // The search state is not a separate URL: `/` is the only indexable page.
+  // `/` canonical + `noindex` for `?q=` results follows Google's guidance on
+  // internal search results (they must not be indexed as separate pages).
+  const canonicalUrl = absoluteUrl('/');
+  const robotsContent = isSearchResultPage
+    ? 'noindex, follow'
+    : 'index, follow, max-image-preview:large';
 
   return (
     <main>
@@ -611,7 +628,9 @@ const HomePage = () => {
         <title>{pageTitle}</title>
         <meta name="description" content={pageDescription} />
         <link rel="canonical" href={canonicalUrl} />
-        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+        <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
+        <meta name="robots" content={robotsContent} />
 
         <meta property="og:site_name" content={SITE_NAME} />
         <meta property="og:title" content={pageTitle} />

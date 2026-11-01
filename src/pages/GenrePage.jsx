@@ -84,6 +84,8 @@ const GenrePage = () => {
         <title>{pageTitle}</title>
         <meta name="description" content={pageDescription} />
         <link rel="canonical" href={canonicalUrl} />
+        <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+        <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
         <meta name="robots" content="index, follow, max-image-preview:large" />
 
         <meta property="og:site_name" content={SITE_NAME} />

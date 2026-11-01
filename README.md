@@ -156,6 +156,9 @@ npm run graph:explain -- buildMovieTitle
 
 Skills are committed in `.agents/skills/graphify/` and `.copilot/skills/graphify/` (plus `.clinerules/graphify.md` for Cline); the generated graph and the venv stay git-ignored. Full setup, commands and caveats: [`docs/graphify.md`](docs/graphify.md).
 
+Compliance map for every recommendation in [Google's SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide): [`docs/seo.md`](docs/seo.md).
+
+
 
 ## 🌐 Deploy on Vercel
 

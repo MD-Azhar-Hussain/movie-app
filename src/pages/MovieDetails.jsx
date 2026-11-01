@@ -257,6 +257,7 @@ const MovieDetails = () => {
         <meta name="twitter:image" content={socialImage} />
 
         <link rel="alternate" hrefLang="en" href={canonicalUrl} />
+        <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
         <link rel="preload" as="image" href={posterUrl} fetchPriority="high" />
       </Head>
 

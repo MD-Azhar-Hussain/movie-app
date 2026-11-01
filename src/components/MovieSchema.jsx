@@ -1,5 +1,5 @@
 import React from 'react';
-import { absoluteUrl, SITE_NAME } from '../lib/seo';
+import { absoluteUrl, SITE_NAME, truncateText } from '../lib/seo';
 import { getPosterImageSource } from '../lib/poster';
 
 /**
@@ -33,6 +33,25 @@ const MovieSchema = ({ movie }) => {
     ? movie.videos.results.find((video) => video.site === 'YouTube' && video.type === 'Trailer')
     : null;
 
+  // Google requires name, description, thumbnailUrl and uploadDate on a
+  // VideoObject before it can be used for video rich results, so the trailer is
+  // only emitted when we can supply all four.
+  const trailerUploadDate = trailer?.published_at || movie.release_date || null;
+  const trailerVideo = trailer && trailerUploadDate
+    ? {
+        '@type': 'VideoObject',
+        name: trailer.name || `${movie.title} trailer`,
+        description: truncateText(
+          movie.overview || `${movie.title} official trailer.`,
+          300
+        ),
+        thumbnailUrl: [`https://i.ytimg.com/vi/${trailer.key}/hqdefault.jpg`],
+        uploadDate: trailerUploadDate,
+        embedUrl: `https://www.youtube.com/embed/${trailer.key}`,
+        contentUrl: `https://www.youtube.com/watch?v=${trailer.key}`,
+      }
+    : null;
+
   const schemaData = {
     '@context': 'https://schema.org',
     '@type': 'Movie',
@@ -49,7 +68,7 @@ const MovieSchema = ({ movie }) => {
       : {}),
     ...(cast.length ? { actor: cast } : {}),
     ...(directors.length ? { director: directors } : {}),
-    ...(trailer ? { trailer: { '@type': 'VideoObject', name: trailer.name, embedUrl: `https://www.youtube.com/embed/${trailer.key}` } } : {}),
+    ...(trailerVideo ? { trailer: trailerVideo } : {}),
     ...(movie.production_companies?.length
       ? {
           productionCompany: movie.production_companies.slice(0, 5).map((company) => ({
