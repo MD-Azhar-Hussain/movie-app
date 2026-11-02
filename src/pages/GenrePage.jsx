@@ -1,15 +1,25 @@
 import React from 'react';
 import { Link, useLoaderData, useParams } from 'react-router-dom';
-import { Head } from 'vite-react-ssg';
+import CollectionLinks from '../components/CollectionLinks';
 import GenreLinks from '../components/GenreLinks';
+import JsonLd from '../components/JsonLd';
+import MovieLinkGrid from '../components/MovieLinkGrid';
+import SeoHead from '../components/SeoHead';
 import SiteFooter from '../components/SiteFooter';
-import { getGenreBySlug } from '../lib/genres';
+import { GENRES_INDEX_PATH, TOP_RATED_PATH } from '../lib/collections';
+import { GENRES, getGenreBySlug } from '../lib/genres';
 import { getPosterImageSource } from '../lib/poster';
 import {
-  absoluteUrl,
+  breadcrumbListSchema,
+  collectionPageSchema,
+  graph,
+  itemListSchema,
+} from '../lib/schema';
+import {
   buildGenreDescription,
   buildGenrePath,
   buildGenreTitle,
+  ROBOTS_NOINDEX,
   SITE_NAME,
 } from '../lib/seo';
 
@@ -24,84 +34,65 @@ const GenrePage = () => {
   if (!genre) {
     return (
       <main className="not-found">
-        <Head>
-          <title>Genre not found - {SITE_NAME}</title>
-          <meta name="robots" content="noindex, follow" />
-        </Head>
+        <SeoHead
+          title={`Genre not found - ${SITE_NAME}`}
+          description="This genre hub does not exist. Browse every movie genre instead."
+          canonicalPath={GENRES_INDEX_PATH}
+          robots={ROBOTS_NOINDEX}
+        />
         <div className="wrapper">
           <h1>Genre not found</h1>
           <p>
-            <Link to="/">Back to Film Point</Link>
+            <Link to={GENRES_INDEX_PATH}>Browse all movie genres</Link>
           </p>
         </div>
       </main>
     );
   }
 
-  const movies = Array.isArray(data?.results) ? data.results.filter((movie) => movie && movie.id) : [];
+  const movies = Array.isArray(data?.results)
+    ? data.results.filter((movie) => movie && movie.id)
+    : [];
   const topPick = movies[0];
-  const canonicalUrl = absoluteUrl(buildGenrePath(genre.slug));
+  const canonicalPath = buildGenrePath(genre.slug);
   const pageTitle = buildGenreTitle(genre);
   const pageDescription = buildGenreDescription(genre);
   const topPickYear = topPick?.release_date ? topPick.release_date.slice(0, 4) : null;
   const topPickRating = formatRating(topPick?.vote_average);
+  const topPickImage = topPick?.poster_path
+    ? getPosterImageSource(topPick.poster_path, 'w500')
+    : undefined;
 
-  const structuredData = [
-    {
-      '@context': 'https://schema.org',
-      '@type': 'CollectionPage',
+  const structuredData = graph(
+    collectionPageSchema({
       name: pageTitle,
       description: pageDescription,
-      url: canonicalUrl,
-      inLanguage: 'en',
-      about: { '@type': 'Thing', name: `${genre.name} films` },
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'ItemList',
-      name: `Best ${genre.name} movies`,
-      numberOfItems: movies.length,
-      itemListElement: movies.slice(0, 20).map((movie, index) => ({
-        '@type': 'ListItem',
-        position: index + 1,
-        url: absoluteUrl(`/movie/${movie.id}`),
-        name: movie.title,
-      })),
-    },
-    {
-      '@context': 'https://schema.org',
-      '@type': 'BreadcrumbList',
-      itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Home', item: absoluteUrl('/') },
-        { '@type': 'ListItem', position: 2, name: `${genre.name} movies`, item: canonicalUrl },
-      ],
-    },
-  ];
+      path: canonicalPath,
+      movies,
+    }),
+    movies.length
+      ? itemListSchema(movies, { name: `Best ${genre.name} movies`, path: canonicalPath })
+      : null,
+    breadcrumbListSchema([
+      { name: 'Home', path: '/' },
+      { name: 'Genres', path: GENRES_INDEX_PATH },
+      { name: `${genre.name} movies`, path: canonicalPath },
+    ])
+  );
 
   return (
     <main className="genre-page">
-      <Head>
-        <title>{pageTitle}</title>
-        <meta name="description" content={pageDescription} />
-        <link rel="canonical" href={canonicalUrl} />
-        <link rel="alternate" hrefLang="en" href={canonicalUrl} />
-        <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
-        <meta name="robots" content="index, follow, max-image-preview:large" />
-
-        <meta property="og:site_name" content={SITE_NAME} />
-        <meta property="og:title" content={pageTitle} />
-        <meta property="og:description" content={pageDescription} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={pageTitle} />
-        <meta name="twitter:description" content={pageDescription} />
-      </Head>
-
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      <SeoHead
+        title={pageTitle}
+        description={pageDescription}
+        canonicalPath={canonicalPath}
+        image={topPickImage}
+        imageAlt={
+          topPickImage ? `Best ${genre.name} movies — top pick: ${topPick.title}` : undefined
+        }
       />
+
+      <JsonLd data={structuredData} />
 
       <div className="pattern" />
 
@@ -109,12 +100,14 @@ const GenrePage = () => {
         <nav aria-label="Breadcrumb" className="genre-breadcrumb">
           <Link to="/">Home</Link>
           <span aria-hidden="true">›</span>
-          <span>{genre.name} movies</span>
+          <Link to={GENRES_INDEX_PATH}>Genres</Link>
+          <span aria-hidden="true">›</span>
+          <span>{genre.name}</span>
         </nav>
 
         <header className="genre-header">
           <p className="section-eyebrow">Genre hub</p>
-          <h1>Best {genre.name} Movies to Watch Right Now</h1>
+          <h1>{`Best ${genre.name} Movies to Watch Right Now`}</h1>
           <p className="genre-intro">{genre.intro}</p>
 
           {topPick && (
@@ -132,8 +125,8 @@ const GenrePage = () => {
         {movies.length === 0 ? (
           <div className="data-error">
             <p>
-              We could not load {genre.name.toLowerCase()} movies right now. The movie data service may be
-              temporarily unavailable.
+              We could not load {genre.name.toLowerCase()} movies right now. The movie data
+              service may be temporarily unavailable.
             </p>
             <div className="data-error-actions">
               <button type="button" onClick={() => window.location.reload()}>
@@ -143,40 +136,24 @@ const GenrePage = () => {
             </div>
           </div>
         ) : (
-          <section aria-labelledby="genre-movies-title">
-            <h2 id="genre-movies-title" className="genre-section-title">
-              {genre.name} movies ranked by popularity
-            </h2>
-            <ul className="genre-movie-grid">
-              {movies.slice(0, 20).map((movie) => {
-                const rating = formatRating(movie.vote_average);
-                const year = movie.release_date ? movie.release_date.slice(0, 4) : null;
-
-                return (
-                  <li key={movie.id}>
-                    <Link to={`/movie/${movie.id}`}>
-                      <img
-                        src={getPosterImageSource(movie.poster_path, 'w342')}
-                        alt={`${movie.title} poster`}
-                        width="342"
-                        height="513"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      <span className="genre-movie-title">{movie.title}</span>
-                      <span className="genre-movie-meta">
-                        {year || 'N/A'}
-                        {rating ? ` · ⭐ ${rating}` : ''}
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
+          <MovieLinkGrid
+            movies={movies}
+            heading={`${genre.name} movies ranked by popularity`}
+            headingId="genre-movies-title"
+          />
         )}
 
-        <GenreLinks currentSlug={genre.slug} title="Explore other genres" variant="grid" />
+        <p className="genre-answer">
+          Want a different starting point? Browse{' '}
+          <Link to={GENRES_INDEX_PATH}>all {GENRES.length} genre hubs</Link>, the{' '}
+          <Link to={TOP_RATED_PATH}>top rated movies of all time</Link>, or the best films of a{' '}
+          <Link to="/decade/2020s">decade</Link>.
+        </p>
+
+        <div className="link-dropdowns">
+          <CollectionLinks title="Browse by release year and decade" />
+          <GenreLinks currentSlug={genre.slug} title="Explore other genres" />
+        </div>
       </div>
 
       <SiteFooter />
@@ -185,4 +162,3 @@ const GenrePage = () => {
 };
 
 export default GenrePage;
-

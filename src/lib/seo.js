@@ -9,13 +9,37 @@ export const SITE_TITLE = 'Film Point | Discover Trending & Popular Movies';
 export const SITE_DESCRIPTION =
   'Explore top trending movies, discover new releases, read detailed synopses, and build your personal watchlist on Film Point.';
 
-export const DEFAULT_OG_IMAGE = `${SITE_URL}/title.png`;
+/**
+ * Social preview image. Generated at build time by
+ * `scripts/generate-og-image.mjs` at the 1200x630 size that X, Facebook,
+ * LinkedIn, Slack and Google Discover all accept; the 200x200 logo that was used
+ * before was below every one of those minimums.
+ */
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/og-default.png`;
+
+export const DEFAULT_OG_IMAGE_PATH = '/og-default.png';
+
+export const OG_IMAGE_WIDTH = 1200;
+
+export const OG_IMAGE_HEIGHT = 630;
+
+export const OG_IMAGE_ALT = `${SITE_NAME} — movie discovery, ratings and watchlists`;
+
+/**
+ * `max-image-preview:large` is required for large thumbnails in Google results,
+ * `max-snippet:-1` lifts the snippet length limit and `max-video-preview:-1`
+ * allows long video previews. None of them are opt-in by default.
+ */
+export const ROBOTS_INDEX = 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+
+export const ROBOTS_NOINDEX = 'noindex, follow';
 
 export const absoluteUrl = (path = '/') => {
   if (!path) return SITE_URL;
   if (/^https?:\/\//i.test(path)) return path;
   return `${SITE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 };
+
 
 export const truncateText = (text, maxLength = 155) => {
   const normalized = String(text || '').replace(/\s+/g, ' ').trim();

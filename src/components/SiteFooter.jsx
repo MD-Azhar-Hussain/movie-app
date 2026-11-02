@@ -41,9 +41,11 @@ const SiteFooter = () => (
 
         <nav className="site-footer-nav" aria-label="Footer links">
           <Link to="/">Discover</Link>
+          <Link to="/genres">Genres</Link>
+          <Link to="/top-rated">Top rated</Link>
+          <Link to="/year/2026">Newest films</Link>
+          <Link to="/decade/1990s">Best of the 90s</Link>
           <Link to="/#watchlist">Watchlist</Link>
-          <Link to="/#trending">Trending</Link>
-          <Link to="/genre/action">Genres</Link>
         </nav>
       </div>
 

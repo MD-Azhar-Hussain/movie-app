@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Head } from 'vite-react-ssg';
 import { Link } from 'react-router-dom';
 import POSTER_FILES from 'virtual:poster-manifest';
 import Search from '../components/Search';
@@ -7,6 +6,8 @@ import Spinner from '../components/Spin';
 import MovieCard from '../components/MovieCard';
 import MovieCardSkeleton from '../components/MovieCardSkeleton';
 import PopularLinks from '../components/PopularLinks';
+import CollectionLinks from '../components/CollectionLinks';
+import SeoHead from '../components/SeoHead';
 import SiteSchema from '../components/SiteSchema';
 import GenreLinks from '../components/GenreLinks';
 import SiteFooter from '../components/SiteFooter';
@@ -25,8 +26,8 @@ import {
 } from '../lib/watchlist';
 import { getPosterImageSource } from '../lib/poster';
 import {
-  absoluteUrl,
-  DEFAULT_OG_IMAGE,
+  ROBOTS_INDEX,
+  ROBOTS_NOINDEX,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_TITLE,
@@ -622,34 +623,16 @@ const HomePage = () => {
   // The search state is not a separate URL: `/` is the only indexable page.
   // `/` canonical + `noindex` for `?q=` results follows Google's guidance on
   // internal search results (they must not be indexed as separate pages).
-  const canonicalUrl = absoluteUrl('/');
-  const robotsContent = isSearchResultPage
-    ? 'noindex, follow'
-    : 'index, follow, max-image-preview:large';
+  const robotsContent = isSearchResultPage ? ROBOTS_NOINDEX : ROBOTS_INDEX;
 
   return (
     <main>
-      <Head>
-        <title>{pageTitle}</title>
-        <meta name="description" content={pageDescription} />
-        <link rel="canonical" href={canonicalUrl} />
-        <link rel="alternate" hrefLang="en" href={canonicalUrl} />
-        <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
-        <meta name="robots" content={robotsContent} />
-
-        <meta property="og:site_name" content={SITE_NAME} />
-        <meta property="og:title" content={pageTitle} />
-        <meta property="og:description" content={pageDescription} />
-        <meta property="og:image" content={DEFAULT_OG_IMAGE} />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:locale" content="en_US" />
-
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={pageTitle} />
-        <meta name="twitter:description" content={pageDescription} />
-        <meta name="twitter:image" content={DEFAULT_OG_IMAGE} />
-      </Head>
+      <SeoHead
+        title={pageTitle}
+        description={pageDescription}
+        canonicalPath="/"
+        robots={robotsContent}
+      />
 
       <SiteSchema />
 
@@ -862,6 +845,7 @@ const HomePage = () => {
 
         <div className="link-dropdowns">
           <GenreLinks title="Browse by genre" />
+          <CollectionLinks title="Browse by release year and decade" />
           <PopularLinks
             limit={120}
             title="Popular movie pages"

@@ -8,10 +8,14 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite-react-ssg build && node scripts/generate-sitemap.js && node scripts/postprocess-html.mjs",
+    "build": "node scripts/generate-og-image.mjs && vite-react-ssg build && node scripts/generate-sitemap.js && node scripts/generate-llms.mjs && node scripts/postprocess-html.mjs && node scripts/seo-audit.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "posters:optimize": "node scripts/optimize-posters.mjs"
+    "posters:optimize": "node scripts/optimize-posters.mjs",
+    "seo:audit": "node scripts/seo-audit.mjs",
+    "build:info": "node scripts/build-info.mjs",
+    "verify:deploy": "node scripts/verify-deploy.mjs",
+    "mock:tmdb": "node scripts/mock-tmdb-server.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",

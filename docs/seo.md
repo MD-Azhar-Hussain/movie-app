@@ -8,12 +8,12 @@ Legend: **Auto** = handled by code/build · **Manual** = one-time action outside
 
 | Recommendation | Implementation | Status |
 | --- | --- | --- |
-| Submit a sitemap | `scripts/generate-sitemap.js` writes `sitemap.xml` (home + 19 genre hubs + prerendered movies, with `lastmod` and `<image:image>` posters) into `dist/`; `robots.txt` points at it | **Auto** |
+| Submit a sitemap | `scripts/generate-sitemap.js` writes `sitemap.xml` with every prerendered URL (home, `/genres`, 19 genre hubs, 22 curated lists, up to 200 movie pages), `lastmod`, `changefreq`, `priority` and `<image:image>` posters read from each page's own `og:image`; `robots.txt` points at it | **Auto** |
 | Submit it in Search Console | Not possible from code — submit `https://filmpoint.vercel.app/sitemap.xml` in GSC + Bing | **Manual** |
-| Offer crawlable links | Prerendered HTML contains 120 movie links + 19 genre links (home), 12 "More like this" + 19 genre links (movie pages), 20 movie links + 18 genre links (genre hubs) | **Auto** |
+| Offer crawlable links | Prerendered HTML has a genre index + curated-list link graph; every page links genres, lists and popular movie pages. Movie pages add 12 "More like this" links | **Auto** |
 | Keep links discoverable, not JS-only | Links live in `<details>` disclosures, which still render in the HTML source | **Auto** |
-| `robots.txt` | `public/robots.txt` — `Allow: /`, `Disallow: /api/`, sitemap directive; regenerated with the deploy origin | **Auto** |
-| Don't block resources Google needs | No `Disallow` on CSS/JS/images; no `X-Robots-Tag` | **Auto** |
+| `robots.txt` | Generated with the deploy origin: `Allow: /`, sitemap directive, a pointer to `llms.txt`. `/api/` is deliberately crawlable — Googlebot needs the proxy after hydration, and blocking it made pages look empty | **Auto** |
+| Don't block resources Google needs | No `Disallow` on CSS/JS/images; `X-Robots-Tag: noindex` only on `/api/*` and `/build-info.json` | **Auto** |
 | HTTPS | Served by Vercel with automatic TLS | **Auto** |
 
 ## 2. Tell Google which pages are important
@@ -29,10 +29,10 @@ Legend: **Auto** = handled by code/build · **Manual** = one-time action outside
 
 | Recommendation | Implementation | Status |
 | --- | --- | --- |
-| Logical URLs | `/`, `/genre/action`, `/genre/science-fiction`, `/movie/27205` (stable IMDb-style IDs) | **Auto** |
-| Breadcrumbs | Movie pages: visible `Home › Action movies › Title` + `BreadcrumbList` JSON-LD. Genre hubs: `Home › Genre` + JSON-LD | **Auto** |
-| Simple navigation | Footer nav (Discover / Watchlist / Trending / Genres), genre + popular-movie dropdowns, genre cross-links, "More like this" | **Auto** |
-| One topic per page | `/` discovery, `/genre/:slug` genre intent, `/movie/:id` single film | **Auto** |
+| Logical URLs | `/`, `/genres`, `/genre/action`, `/top-rated`, `/year/2024`, `/decade/1990s`, `/movie/27205` (stable TMDB IDs) | **Auto** |
+| Breadcrumbs | Movie pages: visible `Home › <Genre> movies › Title` + 3-level `BreadcrumbList`. Genre hubs: `Home › Genres › Genre`. Curated lists: `Home › List` | **Auto** |
+| Simple navigation | Footer nav (Discover / Genres / Top rated / Newest / Best of the 90s / Watchlist), genre + curated-list + popular-movie dropdowns, genre cross-links, "More like this" | **Auto** |
+| One topic per page | `/` discovery, `/genres` taxonomy index, `/genre/:slug` genre intent, `/top-rated` quality intent, `/year/:y` and `/decade/:d` recency/era intent, `/movie/:id` single film | **Auto** |
 
 ## 4. Make your site interesting and useful
 
@@ -101,11 +101,18 @@ Legend: **Auto** = handled by code/build · **Manual** = one-time action outside
 
 ## Automated guardrails
 
-`npm run build` fails the deploy if prerendering breaks, and these are checked in `dist/`:
+`scripts/seo-audit.mjs` runs at the end of `npm run build` (`npm run seo:audit` standalone) and re-reads `dist/`:
 
-- exactly one `<title>` per page, ≤ 60 characters
-- absolute canonical + `hreflang` on every route
-- `?q=` pages `noindex`
-- sitemap generated from the pages that actually exist (`dist/movie/*`, `dist/genre/*`)
-- every JSON-LD block is valid JSON with the expected `@type`
+- exactly one `<title>` per page, one `<meta description>`, one `<h1>`
+- an absolute `<link rel="canonical">` that matches the page URL, with no two pages claiming the same canonical
+- `og:image`, `og:title` and `twitter:card` on every page
+- `<html lang>` and `<meta charset>` inside the first 1024 bytes
+- every `<img>` has an `alt` attribute
+- every JSON-LD block parses
+- `sitemap.xml` lists exactly the pages that exist, with no duplicates and image entries
+- `build-info.json`, `llms.txt`, `robots.txt` and `og-default.png` are present and consistent
+
+Errors are printed loudly but do not fail the build by default: a failing SEO audit would block the deploy and leave the previous build live, which is how a stale deployment goes unnoticed. Set `SEO_AUDIT_STRICT=1` to make errors exit non-zero.
+
+Prerender-completeness is reported separately by `dist/build-info.json` (`moviePages`, `genrePagesWithMovies`, `collectionPagesWithMovies`, `emptyCollections`, `problems`), so a build that succeeded but shipped empty lists is still visible.
 

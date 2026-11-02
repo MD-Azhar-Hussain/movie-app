@@ -4,7 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, follow" />
+    <meta
+      name="description"
+      content="This page does not exist. Browse movie genres, top rated films and curated release-year lists on Film Point."
+    />
     <title>Page not found - Film Point</title>
+    <meta property="og:site_name" content="Film Point" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Page not found - Film Point" />
+    <meta
+      property="og:description"
+      content="This page does not exist. Browse movie genres, top rated films and curated release-year lists on Film Point."
+    />
+    <meta property="og:image" content="https://filmpoint.vercel.app/og-default.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" href="/title.png" />
     <style>
       :root { color-scheme: dark; }
@@ -33,14 +46,30 @@
         text-decoration: none;
       }
       a { color: #ffffff; }
+      nav.links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        justify-content: center;
+        margin-top: 1.75rem;
+        font-size: 0.9rem;
+      }
+      nav.links a { color: #c7b8ff; }
+      nav.links a:hover { color: #ffffff; }
     </style>
   </head>
   <body>
     <main>
       <p class="eyebrow">404</p>
       <h1>We couldn&apos;t find that page</h1>
-      <p>The link may be broken or the movie is no longer listed. Head back to the discovery page to keep browsing.</p>
+      <p>The link may be broken or the movie is no longer listed. Head back to the discovery page, or start from a curated list.</p>
       <a class="cta" href="/">Back to Film Point</a>
+      <nav class="links" aria-label="Popular destinations">
+        <a href="/genres">Browse genres</a>
+        <a href="/top-rated">Top rated movies</a>
+        <a href="/year/2026">Best of 2026</a>
+        <a href="/decade/1990s">Best of the 90s</a>
+      </nav>
     </main>
   </body>
 </html>

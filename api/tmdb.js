@@ -51,13 +51,33 @@ export default async function handler(req, res) {
   const tmdbUrl = `https://api.themoviedb.org${tmdbPath}${searchParams.toString() ? `?${searchParams}` : ''}`;
 
   try {
-    const tmdbResponse = await fetch(tmdbUrl, {
-      method: 'GET',
-      headers: {
-        accept: 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
+    let tmdbResponse;
+
+    // TMDB throttles under load and reports it as 429 or as a 401 "invalid key".
+    // One retry with backoff turns a random failure into a slow success.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      tmdbResponse = await fetch(tmdbUrl, {
+        method: 'GET',
+        headers: {
+          accept: 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        signal: AbortSignal.timeout(20000),
+      });
+
+      const retryable =
+        tmdbResponse.status === 401 ||
+        tmdbResponse.status === 403 ||
+        tmdbResponse.status === 429 ||
+        tmdbResponse.status >= 500;
+
+      if (retryable && attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        continue;
+      }
+
+      break;
+    }
 
     const contentType = tmdbResponse.headers.get('content-type') || '';
     const body = await tmdbResponse.text();

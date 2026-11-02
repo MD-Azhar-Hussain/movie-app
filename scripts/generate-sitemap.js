@@ -3,7 +3,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchPopularMovieSummaries } from '../src/api/tmdb-ssg.js';
 import { GENRES } from '../src/lib/genres.js';
-
+import {
+  COLLECTIONS,
+  GENRES_INDEX_PATH,
+  TOP_RATED_PATH,
+} from '../src/lib/collections.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,24 +26,29 @@ const escapeXml = (value) => String(value)
   .replace(/'/g, '&apos;');
 
 /**
- * Reuses the poster URL that is already in the prerendered page's og:image tag
- * so the sitemap can advertise images without another TMDB call.
+ * Reads the Open Graph image and title that the prerendered page already
+ * advertises, so the sitemap can include image metadata without another TMDB
+ * call and without drifting from the page itself.
  */
-const readPosterImage = (projectRoot, movieId) => {
+const readPageSeo = (pathname) => {
   try {
-    const htmlPath = path.resolve(projectRoot, 'dist', 'movie', String(movieId), 'index.html');
-    if (!fs.existsSync(htmlPath)) return null;
+    const htmlPath = path.resolve(projectRoot, 'dist', ...pathname.split('/').filter(Boolean), 'index.html');
+    if (!fs.existsSync(htmlPath)) return {};
 
     const html = fs.readFileSync(htmlPath, 'utf-8');
-    const match = html.match(/property="og:image" content="(https:\/\/image\.tmdb\.org[^"]+)"/);
-    return match ? match[1] : null;
+    const image = html.match(/property="og:image" content="(https:\/\/image\.tmdb\.org[^"]+)"/);
+    const title = html.match(/property="og:title" content="([^"]+)"/);
+
+    return {
+      image: image ? image[1] : null,
+      title: title ? title[1].replace(/\s+-\s+Film Point$/, '') : null,
+    };
   } catch {
-    return null;
+    return {};
   }
 };
 
-
-async function collectMovieIds(projectRoot) {
+async function collectMovieIds() {
   // 1. Preferred: the prerendered pages themselves (no network, always current).
   const distMovieDir = path.resolve(projectRoot, 'dist', 'movie');
   if (fs.existsSync(distMovieDir)) {
@@ -70,42 +79,86 @@ async function collectMovieIds(projectRoot) {
   return { ids: [], source: 'none' };
 }
 
+
 async function generateSitemap() {
   console.log('[Sitemap] Starting sitemap.xml generation...');
   const today = new Date().toISOString().split('T')[0];
 
-  const { ids: movieIds, source } = await collectMovieIds(projectRoot);
+  const { ids: movieIds, source } = await collectMovieIds();
   console.log(`[Sitemap] Using ${movieIds.length} movie URLs from ${source}.`);
 
   if (movieIds.length === 0) {
-    // Still publish a valid sitemap (home + genre hubs) instead of returning a
-    // 404: the crawler gets the pages that do exist, and the warning is visible
-    // in the build log.
+    // Still publish a valid sitemap (home + hubs) instead of returning a 404:
+    // the crawler gets the pages that do exist, and the warning is visible in
+    // the build log.
     console.warn(
-      '[Sitemap] No movie URLs resolved. Writing the home + genre URLs only — check VITE_API_KEY in the build environment.'
+      '[Sitemap] No movie URLs resolved. Writing the home + hub URLs only — check VITE_API_KEY in the build environment.'
     );
   }
 
+  const homeSeo = readPageSeo('/');
+
   const staticUrls = [
-    { loc: `${SITE_URL}/`, lastmod: today, changefreq: 'daily', priority: '1.0' },
+    {
+      loc: `${SITE_URL}/`,
+      lastmod: today,
+      changefreq: 'daily',
+      priority: '1.0',
+      image: homeSeo.image,
+      imageTitle: homeSeo.title,
+    },
+    {
+      loc: `${SITE_URL}${GENRES_INDEX_PATH}`,
+      lastmod: today,
+      changefreq: 'weekly',
+      priority: '0.9',
+      image: readPageSeo(GENRES_INDEX_PATH).image,
+      imageTitle: 'Browse movies by genre',
+    },
   ];
 
-  const genreUrls = GENRES.map((genre) => ({
-    loc: `${SITE_URL}/genre/${genre.slug}`,
-    lastmod: today,
-    changefreq: 'weekly',
-    priority: '0.7',
-  }));
+  // Curated lists (top rated, release years, decades): distinct search intent,
+  // so they sit just below the home page in priority.
+  const collectionUrls = COLLECTIONS.map((collection) => {
+    const seo = readPageSeo(collection.path);
 
-  const movieUrls = movieIds.map((id) => ({
-    loc: `${SITE_URL}/movie/${id}`,
-    lastmod: today,
-    changefreq: 'weekly',
-    priority: '0.8',
-    image: readPosterImage(projectRoot, id),
-  }));
+    return {
+      loc: `${SITE_URL}${collection.path}`,
+      lastmod: today,
+      changefreq: 'weekly',
+      priority: collection.path === TOP_RATED_PATH ? '0.9' : '0.8',
+      image: seo.image,
+      imageTitle: seo.title || collection.heading,
+    };
+  });
 
-  const allUrls = [...staticUrls, ...genreUrls, ...movieUrls];
+  const genreUrls = GENRES.map((genre) => {
+    const seo = readPageSeo(`/genre/${genre.slug}`);
+
+    return {
+      loc: `${SITE_URL}/genre/${genre.slug}`,
+      lastmod: today,
+      changefreq: 'weekly',
+      priority: '0.7',
+      image: seo.image,
+      imageTitle: seo.title,
+    };
+  });
+
+  const movieUrls = movieIds.map((id) => {
+    const seo = readPageSeo(`/movie/${id}`);
+
+    return {
+      loc: `${SITE_URL}/movie/${id}`,
+      lastmod: today,
+      changefreq: 'weekly',
+      priority: '0.6',
+      image: seo.image,
+      imageTitle: seo.title,
+    };
+  });
+
+  const allUrls = [...staticUrls, ...collectionUrls, ...genreUrls, ...movieUrls];
   const hasImages = allUrls.some((url) => url.image);
 
   const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -124,7 +177,9 @@ ${allUrls
       url.image
         ? `
     <image:image>
-      <image:loc>${escapeXml(url.image)}</image:loc>
+      <image:loc>${escapeXml(url.image)}</image:loc>${
+        url.imageTitle ? `\n      <image:title>${escapeXml(url.imageTitle)}</image:title>` : ''
+      }
     </image:image>`
         : ''
     }
@@ -152,7 +207,21 @@ ${allUrls
   // Keep robots.txt's Sitemap directive pointing at the deployed origin, in
   // both the source folder and the build output (public/ is copied into dist/
   // before this script runs, so dist needs its own write).
-  const robotsContent = `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`;
+  //
+  // `/api/` is intentionally crawlable: movie and genre pages render their
+  // content client-side after hydration, and blocking the proxy made Googlebot
+  // see an empty page. The proxy returns metadata only — no user content.
+  const robotsContent = [
+    '# robots.txt for Film Point',
+    '# Content is prerendered; /api/ is a read-only TMDB proxy used after hydration.',
+    '',
+    'User-agent: *',
+    'Allow: /',
+    '',
+    `Sitemap: ${SITE_URL}/sitemap.xml`,
+    `# Page inventory for AI assistants: ${SITE_URL}/llms.txt`,
+    '',
+  ].join('\n');
   fs.writeFileSync(path.resolve(publicDir, 'robots.txt'), robotsContent, 'utf-8');
   if (fs.existsSync(distDir)) {
     fs.writeFileSync(path.resolve(distDir, 'robots.txt'), robotsContent, 'utf-8');

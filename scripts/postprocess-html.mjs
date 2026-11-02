@@ -11,70 +11,22 @@
  *    so hydration requested `static-loader-data-manifest-undefined.json` (404).
  *    Module scripts are deferred by default; removing `async` restores the
  *    documented order.
+ *
+ * 3. `lang` on <html> — required for a valid `hreflang`/language signal; the
+ *    prerenderer occasionally emits `<html>` without it.
+ *
+ * Finally it writes `dist/build-info.json` (see `scripts/build-info.mjs`).
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { getTmdbApiKey } from '../src/api/tmdb-ssg.js';
+import { writeBuildInfo } from './build-info.mjs';
 
 const distDir = path.resolve(process.cwd(), 'dist');
+const siteUrl = (process.env.SITE_URL || 'https://filmpoint.vercel.app').replace(/\/+$/, '');
 
-/**
- * Writes `dist/build-info.json` so a deployment can report what it actually
- * contains. This is the fastest way to answer "why is the popular-movies
- * dropdown / genre list missing on the deployed site?" — open
- * https://<site>/build-info.json and look at tmdbKeyPresent and the counts.
- */
-const writeBuildInfo = () => {
-  const readIfExists = (filePath) => (fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '');
-  const count = (text, pattern) => (text.match(pattern) || []).length;
-
-  const homeHtml = readIfExists(path.join(distDir, 'index.html'));
-  const movieDir = path.join(distDir, 'movie');
-  const genreDir = path.join(distDir, 'genre');
-
-  const moviePages = fs.existsSync(movieDir)
-    ? fs.readdirSync(movieDir, { withFileTypes: true }).filter((entry) => entry.isDirectory()).length
-    : 0;
-
-  const genreFiles = fs.existsSync(genreDir)
-    ? fs.readdirSync(genreDir, { withFileTypes: true }).filter((entry) => entry.isDirectory())
-    : [];
-
-  const genrePagesWithMovies = genreFiles.filter((entry) =>
-    readIfExists(path.join(genreDir, entry.name, 'index.html')).includes('genre-movie-grid')
-  ).length;
-
-  const sitemapUrls = count(readIfExists(path.join(distDir, 'sitemap.xml')), /<loc>/g);
-  const tmdbKeyPresent = Boolean(getTmdbApiKey());
-  const popularMovieLinksOnHome = count(homeHtml, /href="\/movie\/\d+"/g);
-
-  const problems = [];
-  if (!tmdbKeyPresent) problems.push('VITE_API_KEY was missing at build time — TMDB data is not prerendered.');
-  if (moviePages < 50) problems.push(`Only ${moviePages} movie pages were prerendered (expected ~200).`);
-  if (genrePagesWithMovies !== 19) problems.push(`Only ${genrePagesWithMovies}/19 genre hubs contain movies.`);
-  if (popularMovieLinksOnHome < 20) problems.push(`Home page has ${popularMovieLinksOnHome} movie links (expected 120).`);
-  if (sitemapUrls < 20) problems.push(`sitemap.xml has ${sitemapUrls} URLs (expected 200+).`);
-
-  const info = {
-    builtAt: new Date().toISOString(),
-    node: process.version,
-    tmdbKeyPresent,
-    moviePages,
-    genrePages: genreFiles.length,
-    genrePagesWithMovies,
-    popularMovieLinksOnHome,
-    genreLinksOnHome: count(homeHtml, /href="\/genre\/[a-z-]+"/g),
-    sitemapUrls,
-    problems,
-  };
-
-  fs.writeFileSync(path.join(distDir, 'build-info.json'), `${JSON.stringify(info, null, 2)}\n`, 'utf8');
-
-  console.log(
-    `[build-info] key=${tmdbKeyPresent} moviePages=${moviePages} genresWithMovies=${genrePagesWithMovies}/19 popularLinks=${popularMovieLinksOnHome} sitemapUrls=${sitemapUrls}`
-  );
-  for (const problem of problems) console.warn(`[build-info] ⚠ ${problem}`);
-};
+const charsetTag = '<meta charset="utf-8">';
+let changed = 0;
+let processed = 0;
 
 const walk = (directory) => {
   const entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -84,10 +36,6 @@ const walk = (directory) => {
     return entry.isFile() && entry.name.endsWith('.html') ? [fullPath] : [];
   });
 };
-
-const charsetTag = '<meta charset="utf-8">';
-let changed = 0;
-let processed = 0;
 
 for (const filePath of walk(distDir)) {
   processed += 1;
@@ -106,12 +54,18 @@ for (const filePath of walk(distDir)) {
   html = html.replace(/(<script\b[^>]*\btype="module"[^>]*?)\s+async(?:="[^"]*")?/gi, '$1');
   html = html.replace(/(<script\b[^>]*?)\s+async(?:="[^"]*")?([^>]*\btype="module")/gi, '$1$2');
 
+  // Guarantee a language declaration on <html>.
+  if (/<html\b(?![^>]*\blang=)/i.test(html)) {
+    html = html.replace(/<html\b/i, '<html lang="en"');
+  }
+
   if (html !== original) {
     fs.writeFileSync(filePath, html, 'utf8');
     changed += 1;
   }
 }
 
-console.log(`[html] charset normalised in ${changed}/${processed} prerendered pages`);
+console.log(`[html] charset/lang normalised in ${changed}/${processed} prerendered pages`);
 
-writeBuildInfo();
+writeBuildInfo({ distDir, siteUrl });
+

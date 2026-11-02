@@ -14,8 +14,13 @@ coverage
 *.local
 .github
 
-# Generated at build time by scripts/generate-sitemap.js
+# Generated at build time (see package.json "build")
 public/sitemap.xml
+public/llms.txt
+public/og-default.png
+public/favicon-16.png
+public/favicon-32.png
+public/apple-touch-icon.png
 
 # Vercel local metadata
 .vercel

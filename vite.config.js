@@ -12,17 +12,22 @@ import {
   getTmdbApiKey,
 } from './src/api/tmdb-ssg.js';
 import { GENRE_PATHS } from './src/lib/genres.js';
+import { COLLECTION_PATHS, GENRES_INDEX_PATH } from './src/lib/collections.js';
+import { BUILD_INFO_FILENAME, collectBuildInfo } from './scripts/build-info.mjs';
 
 const projectRootDir = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * A production build without a TMDB key silently ships a broken site: the genre
+ * A production build without a TMDB key silently ships a degraded site: the genre
  * hubs prerender empty, the "Popular movie pages" dropdown renders nothing, no
- * movie page is generated and the sitemap is skipped. Fail loudly instead.
+ * movie page is generated and the sitemap is nearly empty.
  *
- * The details go to stderr *before* throwing, because vite-react-ssg wraps the
- * throw in a generic "An internal error occurred" banner and a multi-line error
- * message is easy to lose in CI logs.
+ * The build used to *throw* in that case, which is the worst of both outcomes:
+ * the deployment fails, Vercel keeps serving the previous (older) build, and
+ * nothing in the UI explains why the site looks stale. It now warns loudly and
+ * lets the build finish, so every deployment publishes current HTML plus a
+ * `build-info.json` that spells out what is missing. Opt into the hard failure
+ * with STRICT_TMDB_BUILD_CHECK=1.
  */
 const assertTmdbKeyForBuild = (command) => {
   if (command !== 'build') return;
@@ -38,32 +43,36 @@ const assertTmdbKeyForBuild = (command) => {
     [
       '',
       '==============================================================',
-      ' BUILD STOPPED: VITE_API_KEY is missing',
-      ' This build would ship empty genre pages and no movie pages.',
+      ' WARNING: VITE_API_KEY is missing',
+      ' This build ships empty genre pages and no movie pages.',
       '==============================================================',
       ' The TMDB bearer token is needed at BUILD time to prerender:',
       '   - the ~200 movie pages',
       '   - the 19 genre hub pages (their ranked movie lists)',
+      '   - the curated year / decade / top-rated lists',
       '   - the "Popular movie pages" dropdown',
-      '   - sitemap.xml',
+      '   - sitemap.xml and llms.txt entries',
       '',
       ' Fix: Vercel -> Project -> Settings -> Environment Variables ->',
       '      add VITE_API_KEY (TMDB v4 read token) for Production AND Preview,',
       '      then redeploy (env changes only apply to new builds).',
       '',
       ' The runtime proxy also needs TMDB_API_KEY (VITE_API_KEY is accepted as',
-      ' a fallback). Verify a deployment with /api/health and /build-info.json.',
+      ' a fallback). Verify a deployment with /api/health, /api/build-info and',
+      ' /build-info.json.',
       '',
-      ' Degraded build on purpose? Set SKIP_TMDB_BUILD_CHECK=1 in the',
-      ' build environment.',
+      ' Want the build to fail instead of publishing a degraded site?',
+      ' Set STRICT_TMDB_BUILD_CHECK=1 in the build environment.',
       '==============================================================',
       '',
     ].join('\n')
   );
 
-  throw new Error(
-    'VITE_API_KEY is missing. Set it in the build environment (Vercel -> Settings -> Environment Variables -> Production + Preview) and redeploy, or set SKIP_TMDB_BUILD_CHECK=1 to build without prerendered movie data.'
-  );
+  if (process.env.STRICT_TMDB_BUILD_CHECK === '1') {
+    throw new Error(
+      'VITE_API_KEY is missing and STRICT_TMDB_BUILD_CHECK=1 is set. Add VITE_API_KEY to the build environment and redeploy.'
+    );
+  }
 };
 
 /**
@@ -202,16 +211,32 @@ const createTmdbProxyMiddleware = () => async (req, res, next) => {
       try {
         let upstreamResponse;
 
-        // Transient network resets are common on flaky networks; retry once.
-        for (let attempt = 0; attempt < 2; attempt += 1) {
+        // Transient network resets are common on flaky networks, and TMDB
+        // throttles with a 401 that claims the key is invalid. Retry both, up to
+        // three attempts, before surfacing the upstream error to the browser.
+        for (let attempt = 0; attempt < 3; attempt += 1) {
           try {
-            upstreamResponse = await fetch(upstreamUrl, {
+            const response = await fetch(upstreamUrl, {
               headers: { accept: 'application/json', Authorization: `Bearer ${apiKey}` },
+              signal: AbortSignal.timeout(20000),
             });
+
+            const retryable =
+              response.status === 401 ||
+              response.status === 403 ||
+              response.status === 429 ||
+              response.status >= 500;
+
+            if (retryable && attempt < 2) {
+              await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+              continue;
+            }
+
+            upstreamResponse = response;
             break;
           } catch (fetchError) {
-            if (attempt === 1) throw fetchError;
-            await new Promise((resolve) => setTimeout(resolve, 300));
+            if (attempt === 2) throw fetchError;
+            await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
           }
         }
 
@@ -263,6 +288,50 @@ const tmdbProxyPlugin = () => ({
   },
 });
 
+/**
+ * Serves `/build-info.json` from `vite dev` and `vite preview`.
+ *
+ * The static file only exists after a full build, so both commands used to
+ * answer this URL with the SPA shell or a bare 404 — the same confusing response
+ * that made the production 404 hard to diagnose. Here the report is generated on
+ * demand from whatever is in `dist/`.
+ */
+const buildInfoMiddleware = (req, res, next) => {
+  const requestPath = (req.url || '').split('?')[0];
+  const isBuildInfoRequest = [
+    `/${BUILD_INFO_FILENAME}`,
+    `/api/build-info`,
+    `/api/${BUILD_INFO_FILENAME}`,
+  ].includes(requestPath);
+
+  if (!isBuildInfoRequest) {
+    next();
+    return;
+  }
+
+  let payload;
+  try {
+    payload = collectBuildInfo({ distDir: path.join(projectRootDir, 'dist') });
+  } catch (error) {
+    payload = { ok: false, error: error.message };
+  }
+
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(`${JSON.stringify({ ...payload, source: 'vite dev/preview middleware' }, null, 2)}\n`);
+};
+
+const buildInfoPlugin = () => ({
+  name: 'build-info',
+  configureServer(server) {
+    server.middlewares.use(buildInfoMiddleware);
+  },
+  configurePreviewServer(server) {
+    server.middlewares.use(buildInfoMiddleware);
+  },
+});
+
 // https://vite.dev/config/
 export default defineConfig(({ command }) => {
   assertTmdbKeyForBuild(command);
@@ -279,6 +348,7 @@ export default defineConfig(({ command }) => {
   plugins: [
     posterManifestPlugin(),
     popularMoviesPlugin(),
+    buildInfoPlugin(),
     tmdbProxyPlugin(),
     react(),
     tailwindcss(),
@@ -302,12 +372,18 @@ export default defineConfig(({ command }) => {
     mock: true,
     concurrency: 10,
     includedRoutes: async () => {
+      // Every page that gets prerendered to static HTML. The curated list pages
+      // (top rated, release years, decades) are the SEO surface that competes
+      // for "best movies of <year>" style queries; each one is a real page with
+      // its own copy, canonical URL, structured data and sitemap entry.
+      const collectionRoutes = [GENRES_INDEX_PATH, ...COLLECTION_PATHS];
+
       try {
         const movieRoutes = await fetchPopularMovieRoutes(POPULAR_MOVIE_COUNT);
-        return ['/', ...movieRoutes, ...GENRE_PATHS];
+        return ['/', ...collectionRoutes, ...GENRE_PATHS, ...movieRoutes];
       } catch (error) {
         console.warn('[SSG] Error fetching popular movie routes for SSG:', error.message);
-        return ['/', ...GENRE_PATHS];
+        return ['/', ...collectionRoutes, ...GENRE_PATHS];
       }
     },
   },

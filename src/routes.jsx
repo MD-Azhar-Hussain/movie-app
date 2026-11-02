@@ -3,8 +3,11 @@ import App from './App';
 import HomePage from './pages/HomePage';
 import MovieDetails from './pages/MovieDetails';
 import GenrePage from './pages/GenrePage';
+import GenresIndexPage from './pages/GenresIndexPage';
+import CollectionPage from './pages/CollectionPage';
 import NotFound from './pages/NotFound';
 import { getGenreBySlug } from './lib/genres';
+import { getCollectionFromParams } from './lib/collections';
 
 /**
  * Shared failure reporting for the browser loaders.
@@ -70,26 +73,53 @@ export const movieLoader = async ({ params }) => {
   }
 };
 
+/**
+ * Shared list loader for every page that renders "a page of movies": the genre
+ * hubs, the yearly lists, the decade lists and the top-rated page.
+ *
+ * `tmdbPath` is a path on api.themoviedb.org/3 (e.g. "/discover/movie?..."),
+ * so callers only have to describe which slice of the catalogue they want.
+ */
+const loadTmdbList = async (tmdbPath, label) => {
+  if (!tmdbPath) return null;
+
+  if (import.meta.env.SSR) {
+    const { fetchTmdbServer } = await import('./api/tmdbServer');
+    return fetchTmdbServer(tmdbPath);
+  }
+
+  const { tmdbFetch } = await import('./api/tmdbProxy');
+
+  try {
+    const response = await tmdbFetch(`https://api.themoviedb.org/3${tmdbPath}`);
+    return await parseTmdbProxyResponse(response, label);
+  } catch (error) {
+    console.warn(`[${label}] Request to /api/tmdb failed:`, error.message);
+    return null;
+  }
+};
+
 export const genreLoader = async ({ params }) => {
   const genre = getGenreBySlug(params.slug);
   if (!genre) return null;
 
   const query = `discover/movie?with_genres=${genre.id}&sort_by=popularity.desc&vote_count.gte=50&include_adult=false&language=en-US`;
 
-  if (import.meta.env.SSR) {
-    const { fetchTmdbServer } = await import('./api/tmdbServer');
-    return fetchTmdbServer(`/${query}`);
-  }
+  return loadTmdbList(`/${query}`, 'genre');
+};
 
-  const { tmdbFetch } = await import('./api/tmdbProxy');
+/**
+ * Loader for `/top-rated`, `/year/:year` and `/decade/:decade`.
+ *
+ * The TMDB query lives in `src/lib/collections.js` next to the page copy, so the
+ * prerendered HTML, the sitemap entry and llms.txt always describe the same
+ * thing.
+ */
+export const collectionLoader = async ({ params }) => {
+  const collection = getCollectionFromParams(params);
+  if (!collection) return null;
 
-  try {
-    const response = await tmdbFetch(`https://api.themoviedb.org/3/${query}`);
-    return await parseTmdbProxyResponse(response, 'genre');
-  } catch (error) {
-    console.warn('[genre] Request to /api/tmdb failed:', error.message);
-    return null;
-  }
+  return loadTmdbList(collection.tmdbPath, collection.kind);
 };
 
 export const routes = [
@@ -112,6 +142,26 @@ export const routes = [
         loader: genreLoader,
       },
       {
+        // Genre index: the crawl hub that links all 19 genre pages.
+        path: 'genres',
+        element: <GenresIndexPage />,
+      },
+      {
+        path: 'top-rated',
+        element: <CollectionPage />,
+        loader: collectionLoader,
+      },
+      {
+        path: 'year/:year',
+        element: <CollectionPage />,
+        loader: collectionLoader,
+      },
+      {
+        path: 'decade/:decade',
+        element: <CollectionPage />,
+        loader: collectionLoader,
+      },
+      {
         path: '*',
         element: <NotFound />,
       },
@@ -120,3 +170,4 @@ export const routes = [
 ];
 
 export default routes;
+

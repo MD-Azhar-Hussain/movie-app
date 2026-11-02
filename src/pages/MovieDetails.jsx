@@ -1,20 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLoaderData, useParams } from 'react-router-dom';
-import { Head } from 'vite-react-ssg';
 import MovieSchema from '../components/MovieSchema';
 import BreadcrumbSchema from '../components/BreadcrumbSchema';
 import FaqSchema from '../components/FaqSchema';
+import CollectionLinks from '../components/CollectionLinks';
 import GenreLinks from '../components/GenreLinks';
+import SeoHead from '../components/SeoHead';
 import SiteFooter from '../components/SiteFooter';
 import Spinner from '../components/Spin';
 import { tmdbFetch } from '../api/tmdbProxy';
 import { getBackdropImageSource, getPosterImageSource, getProfileImageSource } from '../lib/poster';
 import { getGenreSlugById } from '../lib/genres';
 import {
-  absoluteUrl,
   buildGenrePath,
   buildMoviePath,
   buildMovieTitle,
+  ROBOTS_NOINDEX,
   SITE_NAME,
   truncateText,
 } from '../lib/seo';
@@ -32,7 +33,11 @@ const MovieDetails = () => {
   const { id } = useParams();
   const initialData = useLoaderData();
   const [movie, setMovie] = useState(initialData || null);
-  const [loading, setLoading] = useState(!initialData);
+  // During the static build there is no client to hydrate, so a page whose
+  // loader returned nothing must render its "unavailable" state (an <h1>, a
+  // description and `noindex`) instead of a spinner. A prerendered page that
+  // only says "Loading…" is worthless to a crawler and shows up as thin content.
+  const [loading, setLoading] = useState(!initialData && !import.meta.env.SSR);
   const [error, setError] = useState(null);
   const [isSaved, setIsSaved] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -119,10 +124,12 @@ const MovieDetails = () => {
   if (loading) {
     return (
       <main className="min-h-screen text-white flex flex-col items-center justify-center p-6">
-        <Head>
-          <title>Loading movie details - {SITE_NAME}</title>
-          <meta name="robots" content="noindex, follow" />
-        </Head>
+        <SeoHead
+          title={`Loading movie details - ${SITE_NAME}`}
+          description={`Loading synopsis, cast, ratings and streaming details. If this page does not load, use the search page to find the film.`}
+          canonicalPath={`/movie/${id}`}
+          robots={ROBOTS_NOINDEX}
+        />
         <div className="flex flex-col items-center gap-4">
           <Spinner />
           <p className="text-light-200">Loading film details...</p>
@@ -134,10 +141,12 @@ const MovieDetails = () => {
   if (error || !movie) {
     return (
       <main className="min-h-screen text-white flex flex-col items-center justify-center p-6">
-        <Head>
-          <title>Movie not found - {SITE_NAME}</title>
-          <meta name="robots" content="noindex, follow" />
-        </Head>
+        <SeoHead
+          title={`Movie not found - ${SITE_NAME}`}
+          description="This movie page is unavailable. Browse popular films, genres and yearly lists on Film Point instead."
+          canonicalPath={`/movie/${id}`}
+          robots={ROBOTS_NOINDEX}
+        />
         <div className="max-w-md text-center">
           <h1 className="text-3xl font-bold mb-4">Movie Not Available</h1>
           <p className="text-light-200 mb-6">{error || 'Unable to retrieve details for this movie.'}</p>
@@ -165,7 +174,6 @@ const MovieDetails = () => {
   const year = movie.release_date ? movie.release_date.split('-')[0] : 'N/A';
   const rating = typeof movie.vote_average === 'number' && movie.vote_average > 0 ? movie.vote_average.toFixed(1) : 'N/A';
   const pageTitle = buildMovieTitle(movie);
-  const canonicalUrl = absoluteUrl(buildMoviePath(movie.id));
   const topCast = movie.credits?.cast?.slice(0, 6) || [];
   const recommendations = (movie.recommendations?.results || [])
     .filter((item) => item?.id && item?.title && Number(item.id) !== Number(movie.id))
@@ -240,34 +248,28 @@ const MovieDetails = () => {
 
   return (
     <main className="min-h-screen text-white relative pb-20">
-      <Head>
-        <title>{pageTitle}</title>
-        <meta name="description" content={metaDescription} />
-        <link rel="canonical" href={canonicalUrl} />
-        <meta name="robots" content="index, follow, max-image-preview:large" />
-
-        <meta property="og:site_name" content={SITE_NAME} />
-        <meta property="og:title" content={pageTitle} />
-        <meta property="og:description" content={metaDescription} />
-        <meta property="og:image" content={socialImage} />
-        <meta property="og:image:alt" content={`${movie.title} poster`} />
-        <meta property="og:type" content="video.movie" />
-        <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:locale" content="en_US" />
-        {movie.release_date && <meta property="video:release_date" content={movie.release_date} />}
-
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={pageTitle} />
-        <meta name="twitter:description" content={metaDescription} />
-        <meta name="twitter:image" content={socialImage} />
-
-        <link rel="alternate" hrefLang="en" href={canonicalUrl} />
-        <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
+      <SeoHead
+        title={pageTitle}
+        description={metaDescription}
+        canonicalPath={buildMoviePath(movie.id)}
+        image={socialImage}
+        imageAlt={`${movie.title} poster`}
+        type="video.movie"
+      >
+        {movie.release_date ? <meta property="video:release_date" content={movie.release_date} /> : null}
         <link rel="preload" as="image" href={posterUrl} fetchPriority="high" />
-      </Head>
+      </SeoHead>
 
       <MovieSchema movie={movie} />
-      <BreadcrumbSchema movie={movie} />
+      <BreadcrumbSchema
+        items={[
+          { name: 'Home', path: '/' },
+          primaryGenreSlug
+            ? { name: `${primaryGenre.name} movies`, path: buildGenrePath(primaryGenreSlug) }
+            : { name: 'Genres', path: '/genres' },
+          { name: movie.title, path: buildMoviePath(movie.id) },
+        ]}
+      />
       <FaqSchema items={faqItems} />
 
       <div className="pattern" />
@@ -527,6 +529,7 @@ const MovieDetails = () => {
 
         <div className="link-dropdowns">
           <GenreLinks title="Find more movies by genre" />
+          <CollectionLinks title="Browse by release year and decade" />
         </div>
       </div>
 

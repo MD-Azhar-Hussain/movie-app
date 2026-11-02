@@ -25,17 +25,19 @@ Search movies, explore trending searches, read full movie pages, and keep a pers
 
 | Area | Implementation |
 | --- | --- |
-| Prerendering | `vite-react-ssg` emits static HTML for `/`, 19 `/genre/:slug` hubs and up to 200 popular `/movie/:id` pages (dir-style, nested) |
-| Topical depth | 19 genre hub pages with unique intro copy, an instant-answer block and a ranked movie list (targets long-tail queries like "best action movies") |
-| Crawlable link graph | Collapsible `<details>` dropdowns: `PopularLinks` (120 movie pages) and `GenreLinks` (19 genre hubs) on the home page, genre dropdown on every movie page, and 12 "More like this" links per movie page. All anchors stay in the prerendered HTML for crawlers. |
-| Metadata | One `<title>` per page (≤60 chars, keyword first), absolute `canonical`, Open Graph + Twitter cards, `robots` directives |
-| Structured data | `Movie`, `FAQPage`, `BreadcrumbList`, `CollectionPage` + `ItemList`, `WebSite` + `SearchAction`, `Organization` JSON-LD |
-| Direct answers | Every movie page opens with a one-sentence answer plus a "Quick facts" table and a 6-question FAQ (for readers and AI crawlers) |
-| Sitemap | `scripts/generate-sitemap.js` writes 200+ URLs (home + genres + movies) with `lastmod` and image entries for posters |
-| Robots & errors | `public/robots.txt` blocks `/api/`; `public/404.html` + a `noindex` 404 route return a real 404 instead of a soft-404 duplicate homepage |
+| Prerendering | `vite-react-ssg` emits static HTML for `/`, `/genres`, 19 `/genre/:slug` hubs, 22 curated list pages and up to 200 popular `/movie/:id` pages (dir-style, nested) |
+| Topical depth | 19 genre hubs **plus** `/top-rated`, `/year/<year>` (15 years) and `/decade/<decade>` (6 decades): each page has unique copy, an instant-answer sentence, a ranked list and its own canonical URL, so the site competes for "best movies of 2024"-style queries instead of only head terms |
+| Crawlable link graph | Every page links to the genre index, the curated lists (dropdowns) and popular movie pages. All anchors live in the prerendered HTML — `<details>` gives the layout, not JavaScript |
+| Metadata | One `<title>` per page (≤60 chars, keyword first), one absolute `canonical`, Open Graph + Twitter cards with a generated 1200×630 image, `robots` with `max-image-preview:large` / `max-snippet:-1` |
+| Structured data | One `@graph` per page with shared `@id`s: `Movie`, `FAQPage`, `BreadcrumbList`, `CollectionPage` + `ItemList` (nested `Movie`), `WebSite` + `SearchAction`, `Organization` |
+| Direct answers | Movie and list pages open with a one-sentence answer; movie pages add a "Quick facts" table and a 6-question FAQ (for readers and AI crawlers) |
+| Sitemap | `scripts/generate-sitemap.js` writes every prerendered URL with `lastmod`, `changefreq`, `priority` and `<image:image>` entries taken from each page's own `og:image` |
+| AI crawlers | `scripts/generate-llms.mjs` writes a generated `llms.txt` inventory (genres, years, decades, sample movie pages, JSON-LD summary) |
+| Robots & errors | `robots.txt` allows everything (including `/api/`, which Googlebot needs after hydration); unmatched URLs return `public/404.html` with `noindex` instead of a soft-404 homepage |
 | Core Web Vitals | Preconnect to TMDB, `srcset` posters (w342/w500), `fetchPriority="high"` on the LCP poster, lazy-loading elsewhere, no layout-shifting images |
-| Security headers | `vercel.json` adds `X-Content-Type-Options`, `Referrer-Policy`, `X-DNS-Prefetch-Control` and long-lived asset caching |
+| Security headers | `vercel.json` adds `X-Content-Type-Options`, `Referrer-Policy`, `X-DNS-Prefetch-Control`, immutable asset caching and `noindex` on `/api/*` + `/build-info.json` |
 | API key safety | The browser only talks to `/api/tmdb`; `VITE_API_KEY` is **not** shipped in the client bundle |
+| Verification | `npm run seo:audit` re-reads `dist/` and fails on missing titles/canonicals/H1s/alts/invalid JSON-LD; `npm run verify:deploy` checks a live deployment end to end |
 
 
 ### Measured performance (mobile Lighthouse, local preview build)
@@ -136,25 +138,40 @@ The `device_key` is an anonymous client-generated identifier — it is **not** a
 
 ```
 api/tmdb.js                    Vercel serverless TMDB proxy (TMDB_API_KEY)
+api/health.js                  Runtime key/deployment check (/api/health)
+api/build-info.js              Runtime build report (/api/build-info)
 scripts/generate-sitemap.js    Sitemap + robots generator (build step)
+scripts/generate-llms.mjs      llms.txt generator for AI crawlers (build step)
+scripts/generate-og-image.mjs  1200x630 social card + favicons (build step)
+scripts/postprocess-html.mjs   charset/lang/async HTML fixes (build step)
+scripts/build-info.mjs         dist/build-info.json + shared diagnostics
+scripts/seo-audit.mjs          Post-build SEO audit (`npm run seo:audit`)
+scripts/verify-deploy.mjs      Checks a live deployment (`npm run verify:deploy`)
+scripts/mock-tmdb-server.mjs   Offline TMDB mock (`npm run mock:tmdb`)
 src/api/tmdbProxy.js           Browser helper: always calls /api/tmdb
-src/api/tmdbServer.js          Server-only TMDB fetch (SSR/SSG only)
+src/api/tmdbServer.js          Server-only TMDB fetch (SSR/SSG only, retries)
 src/api/tmdb-ssg.js            Build-time popular movie list (routes + nav + sitemap)
 src/appwrite.js                Search analytics + watchlist sync CRUD
 src/lib/poster.js              TMDB image helpers (w342/w500/w780, srcset)
 src/lib/seo.js                 SITE_URL, canonical/OG helpers, title builders
+src/lib/collections.js         Year / decade / top-rated list definitions
+src/lib/schema.js              JSON-LD builders (@graph, @id references)
 src/lib/watchlist.js           Unified watchlist store + offline sync queue
 src/lib/watchLinks.js          External watch/download provider configuration
 src/hooks/useDebounce.js       Small debounce hook (no extra dependency)
 src/pages/HomePage.jsx         Discovery UI, watchlist, detail dialog
 src/pages/MovieDetails.jsx     Prerendered movie page (SEO + JSON-LD + FAQ)
 src/pages/GenrePage.jsx        Prerendered genre hub (long-tail landing pages)
+src/pages/GenresIndexPage.jsx  Prerendered genre index (/genres)
+src/pages/CollectionPage.jsx   Prerendered /top-rated, /year/:y, /decade/:d
 src/pages/NotFound.jsx         Branded noindex 404 route
 src/lib/genres.js              Canonical 19-genre taxonomy (slugs, blurbs, intros)
-src/components/                MovieCard, Search, MovieSchema, SiteSchema,
-                               FaqSchema, BreadcrumbSchema, PopularLinks,
-                               GenreLinks, Spinner, skeletons
-vite.config.js                 Poster manifest, popular-movie list, dev TMDB proxy, SSG
+src/components/                MovieCard, Search, SeoHead, JsonLd, MovieLinkGrid,
+                               MovieSchema, SiteSchema, FaqSchema,
+                               BreadcrumbSchema, PopularLinks, GenreLinks,
+                               CollectionLinks, Spinner, skeletons
+vite.config.js                 Poster manifest, popular-movie list, dev TMDB proxy,
+                               /build-info.json middleware, SSG route list
 ```
 
 ### Data flow
@@ -184,12 +201,13 @@ Compliance map for every recommendation in [Google's SEO Starter Guide](https://
 | Check | Why it matters |
 | --- | --- |
 | `TMDB_API_KEY` set in Vercel (Production **and** Preview) | The browser only calls `/api/tmdb`; without it every movie/search request returns 500. `VITE_API_KEY` is accepted as a fallback. Verify with `/api/health`. |
-| `VITE_API_KEY` set in Vercel | Used at **build** time to prerender the movie pages and generate the 206-URL sitemap. Missing = the site still builds, but with no prerendered movie pages. |
+| `VITE_API_KEY` set in Vercel | Used at **build** time to prerender the movie pages, the genre hubs, the curated lists and the full sitemap. Missing = the build still succeeds, but every list is empty and `build-info.json` says so. |
 | `VITE_SITE_URL` set | Canonical tags, OG URLs and the sitemap use it. Must match the deployed origin. |
 | Node ≥ 20 | Pinned via `engines` in `package.json`; Vite 6 requires it. |
 | Deployment Protection **off** for Production | Crawlers get a login wall otherwise and nothing gets indexed. |
-| Build command = `npm run build` | Runs `vite-react-ssg build` (prerender) **then** `scripts/generate-sitemap.js`. |
+| Build command = `npm run build` | Generates the social image, runs `vite-react-ssg build`, then sitemap → llms.txt → HTML fixes → `build-info.json` → SEO audit. |
 | Output directory = `dist` | Vercel's Vite default; matches the SSG output. |
+| `npm run verify:deploy` after the first deploy | Confirms `/build-info.json`, `/api/health`, `robots.txt`, `sitemap.xml`, a genre hub, a curated list and a movie page all respond for the deployed commit. |
 
 Promote a preview to production by merging into `main`:
 
@@ -220,22 +238,43 @@ That message is the loader's failure state, and the browser console now says whi
 { "ok": true, "tmdbKey": { "TMDB_API_KEY": true, "VITE_API_KEY": false } }
 ```
 
-### Vercel build fails: `[vite-react-ssg] An internal error occurred` / `Command "npm run build" exited with 1`
+### Vercel build logs show a `VITE_API_KEY is missing` banner
 
-That wrapper is vite-react-ssg reporting the exception thrown by this repo's build guard. Scroll up in the log for the banner:
-
-```
-==============================================================
- BUILD STOPPED: VITE_API_KEY is missing
- This build would ship empty genre pages and no movie pages.
-==============================================================
-```
-
-**Cause:** the build has no TMDB token, so nothing can be prerendered (movie pages, genre lists, popular-movies dropdown, sitemap).
+The banner lists what cannot be prerendered (movie pages, genre lists, curated lists, popular-movies dropdown, sitemap/llms entries). The build continues by default so the deployment still publishes current HTML plus a `build-info.json` that reports `tmdbKeyPresent: false`.
 
 **Fix:** Vercel → Project → Settings → Environment Variables → add `VITE_API_KEY` (TMDB v4 read token) for **Production and Preview**, then **redeploy** — env changes never apply to an existing build.
 
-Only if you deliberately want a build without prerendered movie data, add `SKIP_TMDB_BUILD_CHECK=1` to the build environment (the site then has empty genre pages and no movie pages — not for production).
+Prefer a hard failure? Add `STRICT_TMDB_BUILD_CHECK=1` to the build environment (the build then exits non-zero instead of publishing a degraded site). `SKIP_TMDB_BUILD_CHECK=1` does the opposite: it silences the warning when a data-free build is intentional.
+
+### `/build-info.json` returns 404
+
+`dist/build-info.json` is written by `scripts/build-info.mjs` at the end of `npm run build`. If the deployed URL 404s, the deployment was **not built from a commit that runs that step** — i.e. production is serving an older build. Confirm from the outside:
+
+```bash
+npm run verify:deploy            # or: node scripts/verify-deploy.mjs https://your-site
+```
+
+The script prints one line per check and compares the deployed commit with your local `HEAD`.
+
+| Symptom | Meaning | Fix |
+| --- | --- | --- |
+| `/build-info.json` 404 **and** `/api/health`, `/llms.txt` 404 | Nothing from the current branch is deployed | Redeploy the current commit (merge to the production branch, or trigger a redeploy) |
+| `/build-info.json` 404 but `/api/health` 200 | The functions deployed but the build step did not | Build command must be `npm run build` and output directory `dist` |
+| `/build-info.json` 200 with `tmdbKeyPresent: false` and `problems` | The build ran without `VITE_API_KEY` | Add the key for Production **and** Preview, then redeploy |
+| `/build-info.json` 200 but counts are low (`genrePagesWithMovies` / `collectionPagesWithMovies`) | TMDB throttled during the build | Re-run the build; requests now retry with backoff and are concurrency-limited |
+
+`/api/build-info` is the runtime twin: it works even when the static file is missing and reports the deployment's commit, branch and environment.
+
+`npm run build` warns loudly when `VITE_API_KEY` is missing, but deliberately does **not** fail: a failed build keeps the previous deployment live and hides the cause. Pass `STRICT_TMDB_BUILD_CHECK=1` in the build environment if you would rather block a degraded deploy.
+
+### Build a page set offline (no TMDB key, no network)
+
+```bash
+npm run mock:tmdb                                  # terminal 1: http://127.0.0.1:5099
+$env:TMDB_BASE_URL='http://127.0.0.1:5099'; npm run build   # terminal 2 (PowerShell)
+```
+
+`TMDB_BASE_URL` redirects every build-time TMDB call to the mock, so the prerender, sitemap, llms.txt and audit can be verified deterministically. A real build still prerenders 19/19 genre hubs and 22/22 list pages (the mock catalogue is only 40 films, so the "expected ~200 movie pages" warning is intentional).
 
 ### Other common cases
 

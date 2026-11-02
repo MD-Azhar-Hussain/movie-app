@@ -1,4 +1,8 @@
+# robots.txt for Film Point
+# Content is prerendered; /api/ is a read-only TMDB proxy used after hydration.
+
 User-agent: *
 Allow: /
 
 Sitemap: https://filmpoint.vercel.app/sitemap.xml
+# Page inventory for AI assistants: https://filmpoint.vercel.app/llms.txt

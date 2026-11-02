@@ -1,5 +1,6 @@
 import React from 'react';
 import { absoluteUrl, SITE_NAME, truncateText } from '../lib/seo';
+import { WEBSITE_ID } from '../lib/schema';
 import { getPosterImageSource } from '../lib/poster';
 
 /**
@@ -55,8 +56,15 @@ const MovieSchema = ({ movie }) => {
   const schemaData = {
     '@context': 'https://schema.org',
     '@type': 'Movie',
+    '@id': `${absoluteUrl(`/movie/${movie.id}`)}#movie`,
     name: movie.title,
     url: absoluteUrl(`/movie/${movie.id}`),
+    sameAs: [`https://www.themoviedb.org/movie/${movie.id}`],
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': absoluteUrl(`/movie/${movie.id}`),
+    },
+    isPartOf: { '@id': WEBSITE_ID },
     ...(movie.release_date ? { datePublished: movie.release_date } : {}),
     ...(movie.overview ? { description: movie.overview } : {}),
     ...(posterUrl ? { image: posterUrl } : {}),
@@ -98,7 +106,9 @@ const MovieSchema = ({ movie }) => {
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaData) }}
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(schemaData).replace(/</g, '\\u003c'),
+      }}
     />
   );
 };

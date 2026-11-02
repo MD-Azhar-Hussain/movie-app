@@ -36,6 +36,12 @@ const TMDB_HEADERS = (apiKey) => ({
   'User-Agent': 'Mozilla/5.0 (compatible; FilmPointBot/1.0; +https://filmpoint.vercel.app)',
 });
 
+/**
+ * Base URL for TMDB. Override with `TMDB_BASE_URL` to point the build at
+ * `scripts/mock-tmdb-server.mjs` for offline development and pipeline tests.
+ */
+const TMDB_BASE = (process.env.TMDB_BASE_URL || 'https://api.themoviedb.org/3').replace(/\/+$/, '');
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Cached summaries so routes, sitemap and nav share a single TMDB pass. */
@@ -69,16 +75,16 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
   for (let page = 1; page <= pagesToFetch; page += 1) {
     let succeeded = false;
 
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       try {
         let response;
         try {
           response = await fetch(
-            `https://api.themoviedb.org/3/movie/popular?language=en-US&page=${page}`,
+            `${TMDB_BASE}/movie/popular?language=en-US&page=${page}`,
             { headers: TMDB_HEADERS(apiKey), signal: AbortSignal.timeout(15000) }
           );
         } catch (fetchError) {
-          if (attempt === 3) {
+          if (attempt === 5) {
             console.warn(`[SSG] Error fetching popular movies page ${page}:`, fetchError.message);
           } else {
             await sleep(500 * (attempt + 1));
@@ -86,8 +92,13 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
           continue;
         }
 
-        if (response.status === 429) {
-          await sleep(600 * (attempt + 1));
+        if (response.status === 401 || response.status === 403 || response.status === 429 || response.status >= 500) {
+          // TMDB throttles with 429 and, under load, with a 401 that claims the
+          // key is invalid. Backing off and retrying recovers most of these;
+          // giving up on the first one is what silently truncated the popular
+          // list (and therefore the movie pages and the sitemap).
+          const retryAfter = Number(response.headers.get('retry-after')) || 0;
+          await sleep(Math.max(retryAfter * 1000, 700 * (attempt + 1)) + Math.round(Math.random() * 250));
           continue;
         }
 
@@ -107,7 +118,7 @@ export const fetchPopularMovieSummaries = async (count = 100) => {
         succeeded = true;
         break;
       } catch (error) {
-        if (attempt === 3) {
+        if (attempt === 5) {
           console.warn(`[SSG] Error fetching popular movies page ${page}:`, error.message);
         } else {
           await sleep(400 * (attempt + 1));

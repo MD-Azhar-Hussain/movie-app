@@ -22,6 +22,23 @@ This document is the source-of-truth briefing for understanding, explaining, rev
 - **Sitemap:** 206 URLs (home + 19 genres + 186 movies) with `lastmod` and `<image:image>` poster entries for image search.
 - Verified after the change: `npm run lint` passes, `npm run build` prerenders 206 pages, and every JSON-LD block parses.
 
+## 0.2 Third pass: deployment honesty, more indexed pages, verifiable SEO
+
+The production URL was serving an older build: `/build-info.json`, `/api/health` and `/llms.txt` all 404'd while the repository had contained them for days. That single symptom drove most of this pass.
+
+- **Root cause of the stale deployment:** the build *threw* when `VITE_API_KEY` was absent (commit `9084bf6`). A failed build leaves Vercel serving the previous deployment, so the site silently froze at an older commit and nothing explained why. The guard now **warns loudly and lets the build finish**, publishing current HTML plus a `build-info.json` that lists exactly what is missing. `STRICT_TMDB_BUILD_CHECK=1` restores the hard failure for teams that want it.
+- **Diagnostics you can read from a browser:** `scripts/build-info.mjs` writes `dist/build-info.json` with the commit sha, branch, commit subject, page counts, empty-page list and a `problems` array; `/api/build-info` returns the runtime twin (commit, env, key presence) even when the static file is missing; `vite dev`/`vite preview` serve `/build-info.json` through middleware so it never 404s locally either.
+- **Ten new indexed page types:** `/genres` (taxonomy hub), `/top-rated`, 15 `/year/<year>` pages and 6 `/decade/<decade>` pages — 22 prerendered collection pages defined once in `src/lib/collections.js` and shared by the router, the sitemap, `llms.txt` and the audit. Each has its own title, description, canonical, `CollectionPage` + nested-`Movie` `ItemList` + `BreadcrumbList`, an instant-answer sentence and cross-links to its siblings.
+- **Metadata extracted into one component:** `src/components/SeoHead.jsx` now emits title/description/canonical/hreflang/robots/OG/Twitter for every page. Genre hubs previously had **no `og:image`** at all; they now use their top poster.
+- **Social card that meets the minimums:** `scripts/generate-og-image.mjs` composes a real 1200×630 `og-default.png` (plus `favicon-16/32` and `apple-touch-icon`) with `sharp`; the previous `og:image` was a 200×200 logo, below every large-card minimum.
+- **Structured data consolidated:** `src/lib/schema.js` builds one `@graph` per page with shared `@id`s (`#website`, `#organization`, `#breadcrumb`, `#movie`), `sameAs` to TMDB, and `<`-escaped JSON so a title cannot break out of the script tag.
+- **TMDB resilience (the real reason lists were empty):** under load TMDB answers `401 {"status_code":7,"status_message":"Invalid API key"}` for valid tokens, and the client treated that as permanent. Requests now retry 401/403/429/5xx with backoff and jitter, are capped at four concurrent connections, and are cached per URL. Before this, a build reported `148` movie pages and `16/19` genre hubs while looking successful.
+- **No more "Loading…" pages in the index:** a movie page whose loader returned nothing used to prerender a spinner with no `<h1>`. During SSG it now renders the explicit, `noindex` "not available" state.
+- **Real sitemap entries for everything:** `lastmod`, `changefreq`, `priority` per page type plus `<image:image>` + `<image:title>` read from each page's own `og:image`; `robots.txt` is generated with a pointer to `llms.txt`.
+- **`llms.txt` generated from the build:** `scripts/generate-llms.mjs` lists real genres, years, decades and sample movie pages instead of the hand-written file that had already drifted.
+- **Verification instead of hope:** `npm run seo:audit` re-reads `dist/` (titles, descriptions, canonicals, H1s, alt text, JSON-LD, charset position, sitemap/page agreement, build-info/llms/robots/og presence) and prints a report; `npm run verify:deploy` checks a live deployment end to end and compares its commit with local `HEAD`.
+- **Offline proof:** `scripts/mock-tmdb-server.mjs` + `TMDB_BASE_URL` let the whole pipeline be built and audited without a key or network. Validated with it: **19/19 genre hubs and 22/22 collection pages prerendered with data, 0 audit errors**.
+
 ## 1. Executive Summary
 
 
