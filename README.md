@@ -23,6 +23,11 @@ Search movies, explore trending searches, read full movie pages, and keep a pers
 
 ## 🚀 SEO & performance
 
+> Working on SEO for a *different* project? [`docs/SEO_PLAYBOOK.md`](docs/SEO_PLAYBOOK.md) is a
+> framework-agnostic build spec any developer or AI agent can follow — phases in work order,
+> Lighthouse-to-100 checklist, metadata/JSON-LD/sitemap templates, Core Web Vitals budgets,
+> deployment hygiene and a definition-of-done gate. This table is how *this* repo implements it.
+
 | Area | Implementation |
 | --- | --- |
 | Prerendering | `vite-react-ssg` emits static HTML for `/`, `/genres`, 19 `/genre/:slug` hubs, 22 curated list pages and up to 200 popular `/movie/:id` pages (dir-style, nested) |
@@ -184,6 +189,7 @@ Build  ──► TMDB (VITE_API_KEY) ──► dist/index.html + dist/movie/<id>
 ```
 
 Compliance map for every recommendation in [Google's SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide): [`docs/seo.md`](docs/seo.md).
+The framework-agnostic, reusable version of this playbook (the spec to apply to *any* project): [`docs/SEO_PLAYBOOK.md`](docs/SEO_PLAYBOOK.md).
 
 
 

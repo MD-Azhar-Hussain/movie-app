@@ -14,7 +14,7 @@ export const WATCH_PROVIDER_HOSTS = [
   'streamzy.org',
 ];
 
-export const DOWNLOAD_PROVIDER_HOST = 'vidvault.ru';
+export const DOWNLOAD_PROVIDER_HOST = 'vidvault.to';
 
 export const getWatchProviderUrls = (movieId) => {
   if (movieId === undefined || movieId === null) return [];

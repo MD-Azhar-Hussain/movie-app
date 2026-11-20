@@ -1,5 +1,8 @@
 # SEO compliance map — Google SEO Starter Guide
 
+> Looking for the reusable, framework-agnostic version? See [`SEO_PLAYBOOK.md`](SEO_PLAYBOOK.md).
+> That file is the build spec to apply to any project; this file records how *this* repo complies.
+
 Implementation status for every recommendation in
 [Google's SEO Starter Guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide).
 Legend: **Auto** = handled by code/build · **Manual** = one-time action outside the repo · **N/A** = does not apply.
